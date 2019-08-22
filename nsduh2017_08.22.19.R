@@ -4,7 +4,7 @@ library(ggplot2)
 library(psych)
 library(survey)
 library(psych)
-
+library(oddsratio)
 
 defineDes <- function(dataset){
   design <- svydesign(
@@ -17,28 +17,29 @@ defineDes <- function(dataset){
   return(design)
 }
 
-confIntToDf <- function(ci, varName){
-  new <- data.frame(ci)
+confIntToDf <- function(model, varName){
+  new<- data.frame(exp(cbind(coef(model), confint(model))))
   new['variable'] <- varName
   return(new)
 }
 
-mergeCiDfs <- function(bigDf, ci, varName){
-  newDf <- confIntToDf(ci, varName)
+mergeCiDfs <- function(bigDf, model, varName){
+  newDf <- confIntToDf(model, varName)
   bigDf <- rbind(bigDf, newDf)
   return(bigDf)
 }
 
 summaryToDf <- function(model, outcome){
   results <- summary(model)
-  df <- results$coefficients
+  df <- data.frame(results$coefficients)
   df['variable'] <- outcome
+  colnames(df) = c('Estimate', 'Std. Error', 't value', 'Pr(t)', 'outcome')
   return(df)
 }
 
 mergeSummaryDfs <- function(bigDf, model, outcome){
   new <- summaryToDf(model, outcome)
-  bigDf <- rbind(bigDf, new)
+  bigDf <- cbind(bigDf, new)
   return(bigDf)
 }
 
@@ -331,14 +332,14 @@ design1 <- update(
 lifetime_use <- svyglm(anyUse~sex+employment+ed+race+age+hasInsurance, design=design1,
                         family=quasibinomial())
 summary(lifetime_use)
-confIntDf <- confIntToDf(confint(lifetime_use), 'lifetime_use')
+confIntDf <- confIntToDf(lifetime_use, 'lifetime_use')
 summaryDf <- summaryToDf(lifetime_use, 'lifetime_use')
 
 
 lifetime_misuse <- svyglm(anyMisUse~sex+employment+ed+race+age+hasInsurance, design=design1,
                           family=quasibinomial())
 
-confIntDf <- mergeCiDfs(confIntDf, confint(lifetime_misuse), 'lifetime_misuse')
+confIntDf <- mergeCiDfs(confIntDf,lifetime_misuse, 'lifetime_misuse')
 summaryDf <- mergeSummaryDfs(summaryDf, lifetime_misuse, 'lifetime_misuse')
 
 #filter so that only those who would've answered past year questions are included
@@ -383,12 +384,12 @@ design1 <- update(
 
 pastyr_use <- svyglm(pyUse~sex+employment+ed+race+age+hasInsurance, design=design1,
                        family=quasibinomial())
-confIntDf <- mergeCiDfs(confIntDf, confint(pastyr_use), 'pastyr_use')
+confIntDf <- mergeCiDfs(confIntDf, pastyr_use, 'pastyr_use')
 summaryDf <- mergeSummaryDfs(summaryDf, pastyr_use, 'pastyr_use')
 
 pastyr_misuse <- svyglm(pyMisuse~sex+employment+ed+race+age+hasInsurance, design=design1,
                           family=quasibinomial())
-confIntDf <- mergeCiDfs(confIntDf, confint(pastyr_misuse), 'pastyr_misuse')
+confIntDf <- mergeCiDfs(confIntDf, pastyr_misuse, 'pastyr_misuse')
 summaryDf <- mergeSummaryDfs(summaryDf, pastyr_misuse, 'pastyr_misuse')
 
 #Filter to include only those who responded to detailed POMU questions
@@ -444,90 +445,90 @@ design1 <- update(
 
 srcOneDoc <- svyglm(oneDoc~sex+employment+ed+race+age+hasInsurance, design=design1,
                         family=quasibinomial())
-confIntDf <- mergeCiDfs(confIntDf, confint(srcOneDoc), 'srcOneDoc')
+confIntDf <- mergeCiDfs(confIntDf, srcOneDoc, 'srcOneDoc')
 summaryDf <- mergeSummaryDfs(summaryDf, srcOneDoc, 'srcOneDoc')
 
 srcMultDocs <- svyglm(multDocs~sex+employment+ed+race+age+hasInsurance, design=design1,
                       family=quasibinomial())
-confIntDf <- mergeCiDfs(confIntDf, confint(srcMultDocs), 'srcMultDocs')
+confIntDf <- mergeCiDfs(confIntDf, srcMultDocs, 'srcMultDocs')
 summaryDf <- mergeSummaryDfs(summaryDf, srcMultDocs, 'srcMultDocs')
 
 srcDrugDeal <- svyglm(drugDeal~sex+employment+ed+race+age+hasInsurance, design=design1,
                       family=quasibinomial())
-confIntDf <- mergeCiDfs(confIntDf, confint(srcDrugDeal), 'srcDrugDeal')
+confIntDf <- mergeCiDfs(confIntDf, srcDrugDeal, 'srcDrugDeal')
 summaryDf <- mergeSummaryDfs(summaryDf, srcDrugDeal, 'srcDrugDeal')
 
 srcBoughtFrRel <- svyglm(boughtFrRel~sex+employment+ed+race+age+hasInsurance, design=design1,
                       family=quasibinomial())
-confIntDf <- mergeCiDfs(confIntDf, confint(srcBoughtFrRel), 'srcBoughtFrRel')
+confIntDf <- mergeCiDfs(confIntDf, srcBoughtFrRel, 'srcBoughtFrRel')
 summaryDf <- mergeSummaryDfs(summaryDf, srcBoughtFrRel, 'srcBoughtFrRel')
 
 srcTookFrRel <- svyglm(tookFrRel~sex+employment+ed+race+age+hasInsurance, design=design1,
                          family=quasibinomial())
-confIntDf <- mergeCiDfs(confIntDf, confint(srcTookFrRel), 'srcTookFrRel')
+confIntDf <- mergeCiDfs(confIntDf, srcTookFrRel, 'srcTookFrRel')
 summaryDf <- mergeSummaryDfs(summaryDf, srcTookFrRel, 'srcTookFrRel')
 
 srcGotFrRel <- svyglm(gotFrRel~sex+employment+ed+race+age+hasInsurance, design=design1,
                          family=quasibinomial())
-confIntDf <- mergeCiDfs(confIntDf, confint(srcGotFrRel), 'gotFrRel')
+confIntDf <- mergeCiDfs(confIntDf, srcGotFrRel, 'gotFrRel')
 summaryDf <- mergeSummaryDfs(summaryDf, srcGotFrRel, 'gotFrRel')
 
 opDepend <- svyglm(depend~sex+employment+ed+race+age+hasInsurance, design=design1,
                    family=quasibinomial())
-confIntDf <- mergeCiDfs(confIntDf, confint(opDepend), 'dependence')
+confIntDf <- mergeCiDfs(confIntDf, opDepend, 'dependence')
 summaryDf <- mergeSummaryDfs(summaryDf, opDepend, 'dependence')
 
 typeNoRx <- svyglm(noOwnRx~sex+employment+ed+race+age+hasInsurance, design=design1,
                    family=quasibinomial())
-confIntDf <- mergeCiDfs(confIntDf, confint(typeNoRx), 'noOwnRx')
+confIntDf <- mergeCiDfs(confIntDf, typeNoRx, 'noOwnRx')
 summaryDf <- mergeSummaryDfs(summaryDf, typeNoRx, 'noOwnRx')
 
 typeGreaterAmnt <- svyglm(greaterAmnt~sex+employment+ed+race+age+hasInsurance, design=design1,
                           family=quasibinomial())
-confIntDf <- mergeCiDfs(confIntDf, confint(typeGreaterAmnt), 'greaterAmnt')
+confIntDf <- mergeCiDfs(confIntDf, typeGreaterAmnt, 'greaterAmnt')
 summaryDf <- mergeSummaryDfs(summaryDf, typeGreaterAmnt, 'greaterAmnt')
 
 typeLonger <- svyglm(longer~sex+employment+ed+race+age+hasInsurance, design=design1,
                      family=quasibinomial())
-confIntDf <- mergeCiDfs(confIntDf, confint(typeLonger), 'longer')
+confIntDf <- mergeCiDfs(confIntDf, typeLonger, 'longer')
 summaryDf <- mergeSummaryDfs(summaryDf, typeLonger, 'longer')
 
 typeMoreOften <- svyglm(moreOften~sex+employment+ed+race+age+hasInsurance, design=design1,
                         family=quasibinomial())
-confIntDf <- mergeCiDfs(confIntDf, confint(typeMoreOften), 'moreOften')
+confIntDf <- mergeCiDfs(confIntDf, typeMoreOften, 'moreOften')
 summaryDf <- mergeSummaryDfs(summaryDf, typeMoreOften, 'moreOften')
 
 rsnPain <- svyglm(mainPain~sex+employment+ed+race+age+hasInsurance, design=design1,
                   family=quasibinomial())
-confIntDf <- mergeCiDfs(confIntDf, confint(rsnPain), 'rsnPain')
+confIntDf <- mergeCiDfs(confIntDf, rsnPain, 'rsnPain')
 summaryDf <- mergeSummaryDfs(summaryDf, rsnPain, 'rsnPain')
 
 rsnEmot <- svyglm(mainEmot~sex+employment+ed+race+age+hasInsurance, design=design1,
                   family=quasibinomial())
-confIntDf <- mergeCiDfs(confIntDf, confint(rsnEmot), 'rsnEmot')
+confIntDf <- mergeCiDfs(confIntDf,  rsnEmot, 'rsnEmot')
 summaryDf <- mergeSummaryDfs(summaryDf, rsnEmot, 'rsnEmot')
 
 rsnHigh <- svyglm(mainHigh~sex+employment+ed+race+age+hasInsurance, design=design1,
                   family=quasibinomial())
-confIntDf <- mergeCiDfs(confIntDf, confint(rsnHigh), 'rsnHigh')
+confIntDf <- mergeCiDfs(confIntDf,  rsnHigh, 'rsnHigh')
 summaryDf <- mergeSummaryDfs(summaryDf, rsnHigh, 'rsnHigh')
 
 rsnRelax <- svyglm(mainRelax~sex+employment+ed+race+age+hasInsurance, design=design1,
                   family=quasibinomial())
-confIntDf <- mergeCiDfs(confIntDf, confint(rsnRelax), 'rsnRelax')
+confIntDf <- mergeCiDfs(confIntDf, rsnRelax, 'rsnRelax')
 summaryDf <- mergeSummaryDfs(summaryDf, rsnRelax, 'rsnRelax')
 
 rsnExp <- svyglm(mainExp~sex+employment+ed+race+age+hasInsurance, design=design1,
                   family=quasibinomial())
-confIntDf <- mergeCiDfs(confIntDf, confint(rsnExp), 'rsnExp')
+confIntDf <- mergeCiDfs(confIntDf, rsnExp, 'rsnExp')
 summaryDf <- mergeSummaryDfs(summaryDf, rsnExp, 'rsnExp')
 
 rsnSleep <- svyglm(mainSleep~sex+employment+ed+race+age+hasInsurance, design=design1,
                   family=quasibinomial())
-confIntDf <- mergeCiDfs(confIntDf, confint(rsnSleep), 'rsnSleep')
+confIntDf <- mergeCiDfs(confIntDf, rsnSleep, 'rsnSleep')
 summaryDf <- mergeSummaryDfs(summaryDf, rsnSleep, 'rsnSleep')
 
-write.csv(confIntDf, paste(directory, '\\conf_ints_log_reg.csv', sep=''))
+#write.csv(confIntDf, paste(directory, '\\conf_ints_log_reg.csv', sep=''))
 write.csv(summaryDf, paste(directory, '\\summary_log_reg.csv', sep=''))
 
 ####UNIVARIATE####
