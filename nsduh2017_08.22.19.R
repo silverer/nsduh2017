@@ -248,13 +248,11 @@ df1$hooked[df1$PNRRSHOOK == 1 | df1$PNRRSHOOK == 3] <- 1
 df1$hooked[df1$PNRRSHOOK == 2] <- 0
 
 
-df1$dependOld <- df1$DEPENDPNR
+
 df1$dependPYO <- df1$DEPNDPYPNR
-df1$depend <- NA
+
 df1$dependPY <- NA
 #0 = no dependence, 1 = yes dependence, NA = not valid
-df1$depend[df1$dependOld == 0] <- 0
-df1$depend[df1$dependOld == 1] <- 1
 df1$dependPY[df1$dependPYO == 1] <- 1
 df1$dependPY[df1$dependPYO == 0] <- 0
 
@@ -342,45 +340,7 @@ lifetime_misuse <- svyglm(anyMisUse~sex+employment+ed+race+age+hasInsurance, des
 confIntDf <- mergeCiDfs(confIntDf,lifetime_misuse, 'lifetime_misuse')
 summaryDf <- mergeSummaryDfs(summaryDf, lifetime_misuse, 'lifetime_misuse')
 
-#filter so that only those who would've answered past year questions are included
-temp <- filter(df1, anyPRUse == 1)
-nsduh_design <-
-  svydesign(
-    id = ~VEREP,
-    strata = ~VESTR,
-    data = temp,
-    weights = ~ANALWT_C,
-    nest = TRUE
-  )
 
-design1 <- update(
-  nsduh_design,
-  
-  sex = IRSEX,
-  employment = employment,
-  race = raceRecode,
-  ed = education,
-  hasInsurance = hasInsurance,
-  insureType = insureTypeF,
-  marStat = marStat,
-  age = ageCourseF,
-  anyUse = anyPRUse,
-  anyMisUse = anyPRMisuse,
-  pyUse = usePY,
-  pyMisuse = misusePY,
-  oneDoc = oneDoc,
-  multDocs = multDocs,
-  stoleDoc = stoleDoc,
-  gotFrRel = gotFrRel,
-  boughtFrRel = boughtFrRel,
-  tookFrRel = tookFrRel,
-  drugDeal = drugDeal,
-  otherSrc = otherSrc,
-  noOwnRx = noOwnRx,
-  greaterAmnt = greaterAmnt,
-  longer = longer,
-  moreOften = moreOften
-)
 
 pastyr_use <- svyglm(pyUse~sex+employment+ed+race+age+hasInsurance, design=design1,
                        family=quasibinomial())
@@ -528,10 +488,11 @@ rsnSleep <- svyglm(mainSleep~sex+employment+ed+race+age+hasInsurance, design=des
 confIntDf <- mergeCiDfs(confIntDf, rsnSleep, 'rsnSleep')
 summaryDf <- mergeSummaryDfs(summaryDf, rsnSleep, 'rsnSleep')
 
-#write.csv(confIntDf, paste(directory, '\\conf_ints_log_reg.csv', sep=''))
-write.csv(summaryDf, paste(directory, '\\summary_log_reg.csv', sep=''))
+write.csv(confIntDf, paste(directory, '\\conf_ints_log_reg_v1.csv', sep=''))
+write.csv(summaryDf, paste(directory, '\\summary_log_reg_v1.csv', sep=''))
 
 ####UNIVARIATE####
+
 nsduh_design <-
   svydesign(
     id = ~VEREP,
@@ -556,6 +517,7 @@ design1 <- update(
   anyMisUse = anyPRMisuse,
   pyUse = usePY,
   pyMisuse = misusePY,
+  depend = dependPY,
   oneDoc = oneDoc,
   multDocs = multDocs,
   stoleDoc = stoleDoc,
@@ -625,14 +587,190 @@ marA <- svymean(~marStat, design1)
 marA
 confint(marA)
 
-tempUse <- filter(df1, usePY == 1)
-nsduh_design <- defineDes(tempUse)
+temp = filter(df1, !is.na(anyPRUse))
+nsduh_design <-
+  svydesign(
+    id = ~VEREP,
+    strata = ~VESTR,
+    data = temp,
+    weights = ~ANALWT_C,
+    nest = TRUE
+  )
+
 design1 <- update(
   nsduh_design,
   
   sex = IRSEX,
   employment = employment,
   race = raceF,
+  ed = education,
+  hasInsurance = hasInsurance,
+  insureType = insureTypeF,
+  marStat = marStat,
+  age = ageCourseF,
+  anyUse = anyPRUse,
+  anyMisUse = anyPRMisuse,
+  pyUse = usePY,
+  pyMisuse = misusePY,
+  depend = dependPY,
+  oneDoc = oneDoc,
+  multDocs = multDocs,
+  stoleDoc = stoleDoc,
+  gotFrRel = gotFrRel,
+  boughtFrRel = boughtFrRel,
+  tookFrRel = tookFrRel,
+  drugDeal = drugDeal,
+  otherSrc = otherSrc,
+  noOwnRx = noOwnRx,
+  greaterAmnt = greaterAmnt,
+  longer = longer,
+  moreOften = moreOften
+)
+
+buildUnivariateDf <- function(meanby, var){
+  ci <- data.frame(confint(meanby))
+  
+  df <- data.frame(meanby)
+  if(ncol(df) == 2){
+    names(df) <- c('mean', 'SE')
+    df['sex'] <- 'all'
+  }else{
+    names(df) <- c('sex', 'mean', 'SE')
+  }
+  
+  df <- cbind(df, data.frame(ci))
+  df['variable'] <- var
+  print(df)
+  return(df)
+}
+
+stackUnivariateDf <- function(df, meanby, var){
+  new <- buildUnivariateDf(meanby, var)
+  df <- rbind(df, new)
+  print(df)
+  return(df)
+}
+
+#Lifetime use
+lifetimeUse <- svyby(~anyUse, ~sex, design1, svymean)
+df <- buildUnivariateDf(lifetimeUse, 'lifetimeUse')
+useAll <- svymean(~anyUse, design1)
+df <- stackUnivariateDf(df, useAll, 'lifetimeUse')
+
+result <- summary(svytable(~anyUse+sex, design1), statistic = 'adjWald')
+
+
+#Past year use
+pastyrUse <- svyby(~pyUse, ~sex, design1, svymean)
+df <- stackUnivariateDf(df, pastyrUse, 'pastyearUse')
+pyUseAll <- svymean(~pyUse, design1)
+df <- stackUnivariateDf(df, pyUseAll, 'pastyearUse')
+
+summary(svytable(~pyUse+sex, design1), statistic = 'adjWald')
+
+temp <- filter(df1, !is.na(anyPRMisuse))
+nsduh_design <-
+  svydesign(
+    id = ~VEREP,
+    strata = ~VESTR,
+    data = temp,
+    weights = ~ANALWT_C,
+    nest = TRUE
+  )
+
+design1 <- update(
+  nsduh_design,
+  
+  sex = IRSEX,
+  employment = employment,
+  race = raceF,
+  ed = education,
+  hasInsurance = hasInsurance,
+  insureType = insureTypeF,
+  marStat = marStat,
+  age = ageCourseF,
+  anyUse = anyPRUse,
+  anyMisuse = anyPRMisuse,
+  pyUse = usePY,
+  pyMisuse = misusePY,
+  oneDoc = oneDoc,
+  multDocs = multDocs,
+  stoleDoc = stoleDoc,
+  depend = dependPY,
+  gotFrRel = gotFrRel,
+  boughtFrRel = boughtFrRel,
+  tookFrRel = tookFrRel,
+  drugDeal = drugDeal,
+  otherSrc = otherSrc,
+  noOwnRx = noOwnRx,
+  greaterAmnt = greaterAmnt,
+  longer = longer,
+  moreOften = moreOften
+)
+
+#Lifetime misuse
+lifetimeMisuse <- svyby(~anyMisuse, ~sex, design1, svymean)
+df <- stackUnivariateDf(df, lifetimeMisuse, 'lifetimeMisuse')
+
+tbl <- svytable(~anyMisuse+sex, design1)
+summary(tbl, statistic = 'adjWald')
+misUseAll <- svymean(~anyMisuse, design1)
+df <- stackUnivariateDf(df, misUseAll, 'lifetimeMisuse')
+
+#Past year misuse
+pyMisUse <- svyby(~pyMisuse, ~sex, design1, svymean)
+df <- stackUnivariateDf(df, pyMisUse, 'pastyearMisuse')
+
+summary(svytable(~pyMisuse+sex, design1), statistic = 'adjWald')
+
+df <- stackUnivariateDf(df, svymean(~pyMisuse, design1), 'pastYearMisuse')
+
+#Dependence--whole population
+depComp <- svyby(~depend, ~sex, design1, svymean)
+df <- stackUnivariateDf(df, depComp, 'dependence_total_pop')
+summary(svytable(~depend+sex, design1), statistic = 'adjWald')
+df <- stackUnivariateDf(df, svymean(~depend, design1), 'dependence_total_pop')
+
+temp <- filter(df1, usePY == 1)
+nsduh_design <-
+  svydesign(
+    id = ~VEREP,
+    strata = ~VESTR,
+    data = temp,
+    weights = ~ANALWT_C,
+    nest = TRUE
+  )
+
+design1 <- update(
+  nsduh_design,
+  
+  sex = IRSEX,
+  depend = dependPY
+  
+)
+#Dependence--among those with past-year POU
+depComp <- svyby(~depend, ~sex, design1, svymean)
+df <- stackUnivariateDf(df, depComp, 'dependence_py_users')
+df <- stackUnivariateDf(df, svymean(~depend, design1), 'dependence_py_users')
+summary(svytable(~depend+sex, design1), statistic = 'adjWald')
+
+#Filter to include only those who responded to detailed POMU questions
+temp <- filter(df1, misusePY == 1)
+nsduh_design <-
+  svydesign(
+    id = ~VEREP,
+    strata = ~VESTR,
+    data = temp,
+    weights = ~ANALWT_C,
+    nest = TRUE
+  )
+
+design1 <- update(
+  nsduh_design,
+  
+  sex = IRSEX,
+  employment = employment,
+  race = raceRecode,
   ed = education,
   hasInsurance = hasInsurance,
   insureType = insureTypeF,
@@ -666,173 +804,37 @@ design1 <- update(
   moreOften = moreOften
 )
 
+oneDoc <- svyby(~oneDoc, ~sex, design1, svymean, na.rm = TRUE)
+df <- stackUnivariateDf(df, oneDoc, 'srcOneDoc')
+df <- stackUnivariateDf(df, svymean(~oneDoc, design1, na.rm = TRUE), 'srcOneDoc')
 
+summary(svytable(~oneDoc+sex, design1), statistic = "adjWald")
 
-#Dependence
-depComp <- svyby(~dep, ~sex, design1, svymean)
-depComp
-tbl <- svytable(~dep+sex, design1)
-summary(tbl, statistic = 'adjWald')
-tbl <- table(tempMU$dependPY, tempMU$IRSEX)
-depCompA <- svymean(~dep, design1)
-uniCI <- data.frame(confint(depCompA))
-uniCI['variable'] <- 'depend'
+frRelGot <- svyby(~gotFrRel, ~sex, design1, svymean, na.rm = TRUE)
+df <- stackUnivariateDf(df, frRelGot, 'srcGotFrRel')
+df <- stackUnivariateDf(df, svymean(~gotFrRel, design1, na.rm = TRUE), 'srcGotFrRel')
 
-usePy <- svyby(~pyUse, ~sex, design1, svymean, na.rm = TRUE)
-usePy
-thisCi <- data.frame(confint(usePy))
+summary(svytable(~gotFrRel+sex, design1), statistic = "adjWald")
 
+boughtFrRel <- svyby(~boughtFrRel, ~sex, design1, svymean, na.rm = TRUE)
+df <- stackUnivariateDf(df, boughtFrRel, 'srcBoughtFrRel')
+df <- stackUnivariateDf(df, svymean(~boughtFrRel, design1, na.rm = TRUE), 'srcBoughtFrRel')
 
-usePyA <- svymean(~PYUse, design1, na.rm = TRUE)
-usePyA
-confint(usePyA)
-tbl <- svytable(~PYUse+sex, design1)
-summary(tbl, statistic = "adjWald")
+summary(svytable(~boughtFrRel+sex, design1), statistic = "adjWald")
 
-use <- svyby(~anyPRUse, ~sex, design1, svymean, na.rm = TRUE)
-use
-confint(use)
-tbl <- svytable(~anyPRUse+sex, design1)
-summary(tbl, statistic = "adjWald")
-useA <- svymean(~anyPRUse, design1, na.rm = TRUE)
-useA
-confint(useA)
+tookFrRel <- svyby(~tookFrRel, ~sex, design1, svymean, na.rm = TRUE)
+df <- stackUnivariateDf(df, tookFrRel, 'srcTookFrRel')
+df <- stackUnivariateDf(df, svymean(~tookFrRel, design1, na.rm = TRUE), 'srcTookFrRel')
+summary(svytable(~tookFrRel+sex, design1), statistic = "adjWald")
 
-misuse <- svyby(~anyPRMisuse, ~sex, design1, svymean, na.rm = TRUE)
-misuse
-
-
-tbl <- svytable(~anyPRMisuse+sex, design1)
-summary(tbl, statistic = "adjWald")
-
-tbl <- svytable(~misusePY+sex, design1)
-summary(tbl, statistic = "adjWald")
+multDocsComp <- svyby(~multDocs, ~sex, design1, svymean, na.rm = TRUE)
+df <- stackUnivariateDf(df, multDocsComp, 'srcMultDocs')
+df <- stackUnivariateDf(df, svymean(~multDocs, design1,na.rm = TRUE), 'srcMultDocs')
+write.csv(df, paste(directory, '\\test_univariate_outs.csv', sep = ""))
 
 
 
-#Misuse by gender
-tempMisuse <- filter(df1, !is.na(misusePY))
-#### HOW TO WEIGHT!!!! ####
-nsduh_design <-
-  svydesign(
-    id = ~VEREP,
-    strata = ~VESTR,
-    data = tempMisuse,
-    weights = ~ANALWT_C,
-    nest = TRUE
-  )
-
-design1 <- 
-  update(
-    nsduh_design,
-    
-    depend = depend,
-    PYMisuse = misusePY,
-    PRMisuse = anyPRMisuse,
-    sex = IRSEX
-  )
-
-pyDepM <- svyby(~depend, ~sex, design1, svymean, na.rm = TRUE)
-pyDepM
-confint(pyDepM)
-tbl <- svytable(~depend+sex, design1)
-summary(tbl, statistic = "adjWald")
-
-pyMu <- svyby(~PYMisuse, ~sex, design1, svymean, na.rm = TRUE)
-pyMu
-confint(pyMu)
-tbl <- svytable(~PYMisuse+sex, design1)
-summary(tbl, statistic = "adjWald")
-pyMuA <- svymean(~PYMisuse, design1, na.rm=TRUE)
-pyMuA
-confint(pyMuA)
-
-prMTest <- svyby(~PRMisuse, ~sex, design1, svymean, na.rm = TRUE)
-prMTest
-confint(prMTest)
-
-tbl <- svytable(~PRMisuse+sex, design1)
-summary(tbl, statistic="adjWald")
-prMA <- svymean(~PRMisuse, design1)
-prMA
-confint(prMA)
-
-#tempSource <- filter(df1, source > 0)
-
-tempSourceFull <- filter(df1, !is.na(sourceFull))
-dummySource <- fastDummies::dummy_cols(tempSourceFull, select_columns = "sourceFull")
-colnames(dummySource)[names(dummySource) == 'sourceFull_1'] <- "oneDoc"
-colnames(dummySource)[names(dummySource) == 'sourceFull_2'] <- "multDocs"
-colnames(dummySource)[names(dummySource) == 'sourceFull_3'] <- "stoleDoc"
-colnames(dummySource)[names(dummySource) == 'sourceFull_4'] <- "gotFrRel"
-colnames(dummySource)[names(dummySource) == 'sourceFull_5'] <- "boughtFrRel"
-colnames(dummySource)[names(dummySource) == 'sourceFull_6'] <- "tookFrRel"
-colnames(dummySource)[names(dummySource) == 'sourceFull_7'] <- "drugDeal"
-colnames(dummySource)[names(dummySource) == 'sourceFull_8'] <- "otherSrc"
-
-nsduh_design <- defineDes(dummySource)
-
-design1 <- 
-  update(
-    nsduh_design,
-    
-    oneDoc = oneDoc,
-    multDocs = multDocs,
-    stoleDoc = stoleDoc,
-    gotFrRel = gotFrRel,
-    boughtFrRel = boughtFrRel,
-    tookFrRel = tookFrRel,
-    drugDeal = drugDeal,
-    other = otherSrc,
-    medSource = source,
-    employment = employment,
-    race = raceF,
-    ed = education,
-    hasInsurance = hasInsurance,
-    insureType = insureTypeF,
-    marStat = marStat,
-    age = ageCourseF,
-    sexIsM = ifelse(IRSEX == "Men", 1, 0),
-    sex = IRSEX
-  )
-
-oneDocTest <- svyby(~oneDoc, ~sex, design1, svymean, na.rm = TRUE)
-tbl <- svytable(~oneDoc+sex, design1)
-summary(tbl, statistic = "adjWald")
-oneDocAll <- svymean(~oneDoc, design1, na.rm = TRUE)
-oneDocAll
-confint(oneDocAll)
-
-
-frRelGot <- svyby(~gotFrRel, ~sex, design1, svymean, statistic = 'Wald', deff = TRUE, na.rm = TRUE)
-
-tbl <- svytable(~gotFrRel+sex, design1)
-summary(tbl, statistic = "adjWald")
-
-medSourceTest <- svyby(~medSource, ~sex, design1, svymean, na.rm = TRUE)
-medSourceTest
-
-medSourceA <- svymean(~medSource, design1, na.rm = TRUE)
-tbl <- svytable(~medSource+sex, design1)
-summary(tbl, statistic = "adjWald")
-
-boughtFrRelTest <- svyby(~boughtFrRel, ~sex, design1, svymean, na.rm = TRUE)
-confint(boughtFrRelTest)
-tbl <- svytable(~boughtFrRel+sex, design1)
-summary(tbl, statistic = "adjWald")
-
-tookFrRelTest <- svyby(~tookFrRel, ~sex, design1, svymean, na.rm = TRUE)
-confint(tookFrRelTest)
-tbl <- svytable(~tookFrRel+sex, design1)
-summary(tbl, statistic = "Wald")
-
-multDocsTest <- svyby(~multDocs, ~sex, design1, svymean, na.rm = TRUE)
-confint(multDocsTest)
-tbl <- svytable(~multDocs+sex, design1)
-summary(tbl, statistic = "Wald")
-multDocsAll <- svymean(~multDocs, design1, na.rm = TRUE)
-multDocsAll
-confint(multDocsAll)
+summary(svytable(~multDocs+sex, design1), statistic = "adjWald")
 
 tbl <- svytable(~stoleDoc+IRSEX, nsduh_design)
 summary(tbl, statistic = "Wald")
@@ -1409,4 +1411,42 @@ plotCrosstabs <- function(title, names, sexVar, var2){
   }
 }
 
+#filter so that only those who would've answered misuse question are included
+temp <- filter(df1, anyPRUse == 1)
+nsduh_design <-
+  svydesign(
+    id = ~VEREP,
+    strata = ~VESTR,
+    data = temp,
+    weights = ~ANALWT_C,
+    nest = TRUE
+  )
 
+design1 <- update(
+  nsduh_design,
+  
+  sex = IRSEX,
+  employment = employment,
+  race = raceRecode,
+  ed = education,
+  hasInsurance = hasInsurance,
+  insureType = insureTypeF,
+  marStat = marStat,
+  age = ageCourseF,
+  anyUse = anyPRUse,
+  anyMisUse = anyPRMisuse,
+  pyUse = usePY,
+  pyMisuse = misusePY,
+  oneDoc = oneDoc,
+  multDocs = multDocs,
+  stoleDoc = stoleDoc,
+  gotFrRel = gotFrRel,
+  boughtFrRel = boughtFrRel,
+  tookFrRel = tookFrRel,
+  drugDeal = drugDeal,
+  otherSrc = otherSrc,
+  noOwnRx = noOwnRx,
+  greaterAmnt = greaterAmnt,
+  longer = longer,
+  moreOften = moreOften
+)
