@@ -17,6 +17,33 @@ defineDes <- function(dataset){
   return(design)
 }
 
+confIntToDf <- function(ci, varName){
+  new <- data.frame(ci)
+  new['variable'] <- varName
+  return(new)
+}
+
+mergeCiDfs <- function(bigDf, ci, varName){
+  newDf <- confIntToDf(ci, varName)
+  bigDf <- rbind(bigDf, newDf)
+  return(bigDf)
+}
+
+summaryToDf <- function(model, outcome){
+  results <- summary(model)
+  df <- results$coefficients
+  df['variable'] <- outcome
+  return(df)
+}
+
+mergeSummaryDfs <- function(bigDf, model, outcome){
+  new <- summaryToDf(model, outcome)
+  bigDf <- rbind(bigDf, new)
+  return(bigDf)
+}
+
+
+directory <- "C:\\Users\\ers2244\\Documents\\opioids\\nsduh2017"
 
 
 df <- read.delim("C:\\Users\\ers2244\\Documents\\opioids\\NSDUH_2017_Tab.tsv", header = TRUE, sep = '\t')
@@ -95,6 +122,14 @@ df1$raceF <- factor(df1$NEWRACE2, levels = c(1:7), labels = c('NHW', 'Black',
                                                               'Native Am/AK', 'pacific isl',
                                                               'asian', 'more than one',
                                                               'hispanic'))
+df1$raceRecode <- df1$raceF
+
+levels(df1$raceRecode) <- c('NHW', 'Black',
+                            'Native Am/AK/pac isl', 'Native Am/AK/pac isl',
+                            'asian', 'more than one',
+                            'hispanic')
+
+
 #1 = yes misuse, 0 = no misuse
 #NA = no mis/use/invalid input
 df1$anyPRMisuse <- NA
@@ -234,6 +269,24 @@ colnames(df1)[names(df1) == 'sourceFull_6'] <- "tookFrRel"
 colnames(df1)[names(df1) == 'sourceFull_7'] <- "drugDeal"
 colnames(df1)[names(df1) == 'sourceFull_8'] <- "otherSrc"
 
+df1 <- fastDummies::dummy_cols(df1, select_columns = "mainRsn")
+
+colnames(df1)[names(df1) == 'mainRsn_1'] <- "mainPain"
+colnames(df1)[names(df1) == 'mainRsn_2'] <- "mainRelax"
+colnames(df1)[names(df1) == 'mainRsn_3'] <- "mainExperiment"
+colnames(df1)[names(df1) == 'mainRsn_4'] <- "mainHigh"
+colnames(df1)[names(df1) == 'mainRsn_5'] <- "mainSleep"
+colnames(df1)[names(df1) == 'mainRsn_6'] <- "mainEmotions"
+colnames(df1)[names(df1) == 'mainRsn_7'] <- "mainOtherDrug"
+colnames(df1)[names(df1) == 'mainRsn_8'] <- "mainHooked"
+colnames(df1)[names(df1) == 'mainRsn_9'] <- "mainOther"
+
+
+write.csv(df1, paste(directory, '\\opioids_cleaned_data_v1.csv', sep=''))
+
+
+####DATA ANALYSIS####
+####MULTIVARIATE####
 nsduh_design <-
   svydesign(
     id = ~VEREP,
@@ -244,15 +297,12 @@ nsduh_design <-
   )
 
 
-
-####DATA ANALYSIS####
-####DEMOGRAPHICS####
 design1 <- update(
   nsduh_design,
   
   sex = IRSEX,
   employment = employment,
-  race = raceF,
+  race = raceRecode,
   ed = education,
   hasInsurance = hasInsurance,
   insureType = insureTypeF,
@@ -269,37 +319,223 @@ design1 <- update(
   boughtFrRel = boughtFrRel,
   tookFrRel = tookFrRel,
   drugDeal = drugDeal,
-  otherSrc = otherSrc
+  otherSrc = otherSrc,
+  noOwnRx = noOwnRx,
+  greaterAmnt = greaterAmnt,
+  longer = longer,
+  moreOften = moreOften
 )
 
 
-lifetime_use <- svyglm(anyUse~sex+employment+ed+race+age+insureType, design=design1,
+
+lifetime_use <- svyglm(anyUse~sex+employment+ed+race+age+hasInsurance, design=design1,
                         family=quasibinomial())
 summary(lifetime_use)
-comp <- anova(lifetime_use)
+confIntDf <- confIntToDf(confint(lifetime_use), 'lifetime_use')
+summaryDf <- summaryToDf(lifetime_use, 'lifetime_use')
 
-lifetime_misuse <- svyglm(anyMisUse~sex+employment+ed+race+age+insureType, design=design1,
+
+lifetime_misuse <- svyglm(anyMisUse~sex+employment+ed+race+age+hasInsurance, design=design1,
                           family=quasibinomial())
-summary(lifetime_misuse)
 
-#should i filter out people whose answer to lifetime use/misuse would've precluded them from
-#answering the past-year questions?
+confIntDf <- mergeCiDfs(confIntDf, confint(lifetime_misuse), 'lifetime_misuse')
+summaryDf <- mergeSummaryDfs(summaryDf, lifetime_misuse, 'lifetime_misuse')
 
-pastyr_use <- svyglm(pyUse~sex+employment+ed+race+age+insureType, design=design1,
-                       family=quasibinomial())
-summary(pastyr_use)
-
-pastyr_misuse <- svyglm(pyMisuse~sex+employment+ed+race+age+insureType, design=design1,
-                          family=quasibinomial())
-summary(pastyr_misuse)
-
-#Filter to include only those who responded to detailed POMU questions
-test <- filter(df1, misusePY == 1)
+#filter so that only those who would've answered past year questions are included
+temp <- filter(df1, anyPRUse == 1)
 nsduh_design <-
   svydesign(
     id = ~VEREP,
     strata = ~VESTR,
-    data = test,
+    data = temp,
+    weights = ~ANALWT_C,
+    nest = TRUE
+  )
+
+design1 <- update(
+  nsduh_design,
+  
+  sex = IRSEX,
+  employment = employment,
+  race = raceRecode,
+  ed = education,
+  hasInsurance = hasInsurance,
+  insureType = insureTypeF,
+  marStat = marStat,
+  age = ageCourseF,
+  anyUse = anyPRUse,
+  anyMisUse = anyPRMisuse,
+  pyUse = usePY,
+  pyMisuse = misusePY,
+  oneDoc = oneDoc,
+  multDocs = multDocs,
+  stoleDoc = stoleDoc,
+  gotFrRel = gotFrRel,
+  boughtFrRel = boughtFrRel,
+  tookFrRel = tookFrRel,
+  drugDeal = drugDeal,
+  otherSrc = otherSrc,
+  noOwnRx = noOwnRx,
+  greaterAmnt = greaterAmnt,
+  longer = longer,
+  moreOften = moreOften
+)
+
+pastyr_use <- svyglm(pyUse~sex+employment+ed+race+age+hasInsurance, design=design1,
+                       family=quasibinomial())
+confIntDf <- mergeCiDfs(confIntDf, confint(pastyr_use), 'pastyr_use')
+summaryDf <- mergeSummaryDfs(summaryDf, pastyr_use, 'pastyr_use')
+
+pastyr_misuse <- svyglm(pyMisuse~sex+employment+ed+race+age+hasInsurance, design=design1,
+                          family=quasibinomial())
+confIntDf <- mergeCiDfs(confIntDf, confint(pastyr_misuse), 'pastyr_misuse')
+summaryDf <- mergeSummaryDfs(summaryDf, pastyr_misuse, 'pastyr_misuse')
+
+#Filter to include only those who responded to detailed POMU questions
+temp <- filter(df1, misusePY == 1)
+nsduh_design <-
+  svydesign(
+    id = ~VEREP,
+    strata = ~VESTR,
+    data = temp,
+    weights = ~ANALWT_C,
+    nest = TRUE
+  )
+
+design1 <- update(
+  nsduh_design,
+  
+  sex = IRSEX,
+  employment = employment,
+  race = raceRecode,
+  ed = education,
+  hasInsurance = hasInsurance,
+  insureType = insureTypeF,
+  marStat = marStat,
+  age = ageCourseF,
+  anyUse = anyPRUse,
+  anyMisUse = anyPRMisuse,
+  pyUse = usePY,
+  pyMisuse = misusePY,
+  oneDoc = oneDoc,
+  multDocs = multDocs,
+  stoleDoc = stoleDoc,
+  gotFrRel = gotFrRel,
+  boughtFrRel = boughtFrRel,
+  tookFrRel = tookFrRel,
+  drugDeal = drugDeal,
+  otherSrc = otherSrc,
+  depend = dependPY,
+  mainPain = mainPain,
+  mainEmot = mainEmotions,
+  mainHigh = mainHigh,
+  mainRelax = mainRelax,
+  mainHooked = mainHooked,
+  mainOther = mainOther,
+  mainOtherDrug = mainOtherDrug,
+  mainSleep = mainSleep,
+  mainExp = mainExperiment,
+  noOwnRx = noOwnRx,
+  greaterAmnt = greaterAmnt,
+  longer = longer,
+  moreOften = moreOften
+)
+
+
+srcOneDoc <- svyglm(oneDoc~sex+employment+ed+race+age+hasInsurance, design=design1,
+                        family=quasibinomial())
+confIntDf <- mergeCiDfs(confIntDf, confint(srcOneDoc), 'srcOneDoc')
+summaryDf <- mergeSummaryDfs(summaryDf, srcOneDoc, 'srcOneDoc')
+
+srcMultDocs <- svyglm(multDocs~sex+employment+ed+race+age+hasInsurance, design=design1,
+                      family=quasibinomial())
+confIntDf <- mergeCiDfs(confIntDf, confint(srcMultDocs), 'srcMultDocs')
+summaryDf <- mergeSummaryDfs(summaryDf, srcMultDocs, 'srcMultDocs')
+
+srcDrugDeal <- svyglm(drugDeal~sex+employment+ed+race+age+hasInsurance, design=design1,
+                      family=quasibinomial())
+confIntDf <- mergeCiDfs(confIntDf, confint(srcDrugDeal), 'srcDrugDeal')
+summaryDf <- mergeSummaryDfs(summaryDf, srcDrugDeal, 'srcDrugDeal')
+
+srcBoughtFrRel <- svyglm(boughtFrRel~sex+employment+ed+race+age+hasInsurance, design=design1,
+                      family=quasibinomial())
+confIntDf <- mergeCiDfs(confIntDf, confint(srcBoughtFrRel), 'srcBoughtFrRel')
+summaryDf <- mergeSummaryDfs(summaryDf, srcBoughtFrRel, 'srcBoughtFrRel')
+
+srcTookFrRel <- svyglm(tookFrRel~sex+employment+ed+race+age+hasInsurance, design=design1,
+                         family=quasibinomial())
+confIntDf <- mergeCiDfs(confIntDf, confint(srcTookFrRel), 'srcTookFrRel')
+summaryDf <- mergeSummaryDfs(summaryDf, srcTookFrRel, 'srcTookFrRel')
+
+srcGotFrRel <- svyglm(gotFrRel~sex+employment+ed+race+age+hasInsurance, design=design1,
+                         family=quasibinomial())
+confIntDf <- mergeCiDfs(confIntDf, confint(srcGotFrRel), 'gotFrRel')
+summaryDf <- mergeSummaryDfs(summaryDf, srcGotFrRel, 'gotFrRel')
+
+opDepend <- svyglm(depend~sex+employment+ed+race+age+hasInsurance, design=design1,
+                   family=quasibinomial())
+confIntDf <- mergeCiDfs(confIntDf, confint(opDepend), 'dependence')
+summaryDf <- mergeSummaryDfs(summaryDf, opDepend, 'dependence')
+
+typeNoRx <- svyglm(noOwnRx~sex+employment+ed+race+age+hasInsurance, design=design1,
+                   family=quasibinomial())
+confIntDf <- mergeCiDfs(confIntDf, confint(typeNoRx), 'noOwnRx')
+summaryDf <- mergeSummaryDfs(summaryDf, typeNoRx, 'noOwnRx')
+
+typeGreaterAmnt <- svyglm(greaterAmnt~sex+employment+ed+race+age+hasInsurance, design=design1,
+                          family=quasibinomial())
+confIntDf <- mergeCiDfs(confIntDf, confint(typeGreaterAmnt), 'greaterAmnt')
+summaryDf <- mergeSummaryDfs(summaryDf, typeGreaterAmnt, 'greaterAmnt')
+
+typeLonger <- svyglm(longer~sex+employment+ed+race+age+hasInsurance, design=design1,
+                     family=quasibinomial())
+confIntDf <- mergeCiDfs(confIntDf, confint(typeLonger), 'longer')
+summaryDf <- mergeSummaryDfs(summaryDf, typeLonger, 'longer')
+
+typeMoreOften <- svyglm(moreOften~sex+employment+ed+race+age+hasInsurance, design=design1,
+                        family=quasibinomial())
+confIntDf <- mergeCiDfs(confIntDf, confint(typeMoreOften), 'moreOften')
+summaryDf <- mergeSummaryDfs(summaryDf, typeMoreOften, 'moreOften')
+
+rsnPain <- svyglm(mainPain~sex+employment+ed+race+age+hasInsurance, design=design1,
+                  family=quasibinomial())
+confIntDf <- mergeCiDfs(confIntDf, confint(rsnPain), 'rsnPain')
+summaryDf <- mergeSummaryDfs(summaryDf, rsnPain, 'rsnPain')
+
+rsnEmot <- svyglm(mainEmot~sex+employment+ed+race+age+hasInsurance, design=design1,
+                  family=quasibinomial())
+confIntDf <- mergeCiDfs(confIntDf, confint(rsnEmot), 'rsnEmot')
+summaryDf <- mergeSummaryDfs(summaryDf, rsnEmot, 'rsnEmot')
+
+rsnHigh <- svyglm(mainHigh~sex+employment+ed+race+age+hasInsurance, design=design1,
+                  family=quasibinomial())
+confIntDf <- mergeCiDfs(confIntDf, confint(rsnHigh), 'rsnHigh')
+summaryDf <- mergeSummaryDfs(summaryDf, rsnHigh, 'rsnHigh')
+
+rsnRelax <- svyglm(mainRelax~sex+employment+ed+race+age+hasInsurance, design=design1,
+                  family=quasibinomial())
+confIntDf <- mergeCiDfs(confIntDf, confint(rsnRelax), 'rsnRelax')
+summaryDf <- mergeSummaryDfs(summaryDf, rsnRelax, 'rsnRelax')
+
+rsnExp <- svyglm(mainExp~sex+employment+ed+race+age+hasInsurance, design=design1,
+                  family=quasibinomial())
+confIntDf <- mergeCiDfs(confIntDf, confint(rsnExp), 'rsnExp')
+summaryDf <- mergeSummaryDfs(summaryDf, rsnExp, 'rsnExp')
+
+rsnSleep <- svyglm(mainSleep~sex+employment+ed+race+age+hasInsurance, design=design1,
+                  family=quasibinomial())
+confIntDf <- mergeCiDfs(confIntDf, confint(rsnSleep), 'rsnSleep')
+summaryDf <- mergeSummaryDfs(summaryDf, rsnSleep, 'rsnSleep')
+
+write.csv(confIntDf, paste(directory, '\\conf_ints_log_reg.csv', sep=''))
+write.csv(summaryDf, paste(directory, '\\summary_log_reg.csv', sep=''))
+
+####UNIVARIATE####
+nsduh_design <-
+  svydesign(
+    id = ~VEREP,
+    strata = ~VESTR,
+    data = df1,
     weights = ~ANALWT_C,
     nest = TRUE
   )
@@ -326,51 +562,19 @@ design1 <- update(
   boughtFrRel = boughtFrRel,
   tookFrRel = tookFrRel,
   drugDeal = drugDeal,
-  otherSrc = otherSrc
+  otherSrc = otherSrc,
+  noOwnRx = noOwnRx,
+  greaterAmnt = greaterAmnt,
+  longer = longer,
+  moreOften = moreOften
 )
 
-oneDoc1 <- svyglm(oneDoc~sex+employment+ed+race+age+insureType, design=design1,
-                        family=quasibinomial())
-summary(oneDoc1)
-
-srcOneDoc <- svyglm(oneDoc~sex+employment+ed+race+age+insureType, design=design1,
-                        family=quasibinomial())
-summary(srcOneDoc)
-
-srcMultDocs <- svyglm(multDocs~sex+employment+ed+race+age+insureType, design=design1,
-                    family=quasibinomial())
-summary(srcMultDocs)
-
-srcDrugDeal <- svyglm(multDocs~sex+employment+ed+race+age+insureType, design=design1,
-                      family=quasibinomial())
-summary(srcDrugDeal)
-
-
-
-tempUse <- filter(df1, usePY == 1)
-nsduh_design <- defineDes(tempUse)
-design1 <- update(
-  nsduh_design,
-  sex = IRSEX,
-  dep = dependPY
-)
-
-
-
-depComp <- svyby(~dep, ~sex, design1, svymean)
-depComp
-tbl <- svytable(~dep+sex, design1)
-summary(tbl, statistic = 'adjWald')
-tbl <- table(tempMU$dependPY, tempMU$IRSEX)
-depCompA <- svymean(~dep, design1)
-confint(depCompA)
-
-
+#DEMOGRAPHICS
 emp <- svyby(~employment, ~sex, design1, svymean)
 emp
 confint(emp)
 tbl <- svytable(~employment+sex, design1)
-summary(tbl, statistic = 'adjWald')
+result <- summary(tbl, statistic = 'adjWald')
 empA <- svymean(~employment, design1)
 empA
 confint(empA)
@@ -420,44 +624,11 @@ marA <- svymean(~marStat, design1)
 marA
 confint(marA)
 
-####DEPENDENCE####
-temp <- filter(df1, !is.na(df1$depend))
-nsduh_design <- defineDes(temp)
-
-design1 <- 
-  update(
-    nsduh_design,
-    
-    depend = depend,
-    sex = IRSEX,
-    employment = employment,
-    race = raceF,
-    ed = education,
-    hasInsurance = hasInsurance,
-    insureType = insureTypeF,
-    marStat = marStat,
-    age = ageCourseF,
-    sexIsM = ifelse(IRSEX == "Men", 1, 0)
-  )
-dependTest <- svyby(~depend, ~sex, design1, svymean, na.rm = TRUE)
-confint(dependTest)
-tbl <- svytable(~depend+sex, design1)
-summary(tbl, statistic = 'Wald')
-
-
-
-
-####USE PATTERNS####
-
-
-tempUse <- filter(df1, !is.na(anyPRUse))
-nsduh_design <- defineDes(df1)
+tempUse <- filter(df1, usePY == 1)
+nsduh_design <- defineDes(tempUse)
 design1 <- update(
   nsduh_design,
-  anyPRUse = anyPRUse,
-  pyUse = usePY,
-  anyPRMisuse = anyPRMisuse,
-  pyMisuse = misusePY,
+  
   sex = IRSEX,
   employment = employment,
   race = raceF,
@@ -466,41 +637,50 @@ design1 <- update(
   insureType = insureTypeF,
   marStat = marStat,
   age = ageCourseF,
-  sexIsM = ifelse(IRSEX == "Men", 1, 0)
-  
+  anyUse = anyPRUse,
+  anyMisUse = anyPRMisuse,
+  pyUse = usePY,
+  pyMisuse = misusePY,
+  oneDoc = oneDoc,
+  multDocs = multDocs,
+  stoleDoc = stoleDoc,
+  gotFrRel = gotFrRel,
+  boughtFrRel = boughtFrRel,
+  tookFrRel = tookFrRel,
+  drugDeal = drugDeal,
+  otherSrc = otherSrc,
+  depend = dependPY,
+  mainPain = mainPain,
+  mainEmot = mainEmotions,
+  mainHigh = mainHigh,
+  mainRelax = mainRelax,
+  mainHooked = mainHooked,
+  mainOther = mainOther,
+  mainOtherDrug = mainOtherDrug,
+  mainSleep = mainSleep,
+  mainExp = mainExperiment,
+  noOwnRx = noOwnRx,
+  greaterAmnt = greaterAmnt,
+  longer = longer,
+  moreOften = moreOften
 )
 
 
 
+#Dependence
+depComp <- svyby(~dep, ~sex, design1, svymean)
+depComp
+tbl <- svytable(~dep+sex, design1)
+summary(tbl, statistic = 'adjWald')
+tbl <- table(tempMU$dependPY, tempMU$IRSEX)
+depCompA <- svymean(~dep, design1)
+uniCI <- data.frame(confint(depCompA))
+uniCI['variable'] <- 'depend'
+
 usePy <- svyby(~pyUse, ~sex, design1, svymean, na.rm = TRUE)
 usePy
-confint(usePy)
+thisCi <- data.frame(confint(usePy))
 
-par(mar = c(6, 7, 5, 6) + 0.1)
-
-plotTop <- 0.5
-
-barCenters <- barplot(height = usePy$pyUse, ylab = "Percent",
-                      names.arg = c("Men", "Women"),
-                      ylim = c(0, plotTop),
-                      main = "Past-Year POU by Gender")
-
-arrows(barCenters, usePy$pyUse - usePy$se * 2, barCenters,
-       usePy$pyUse + usePy$se * 2, lwd = 1.5, angle = 90,
-       code = 3, length = 0.05)
-
-dodge <- position_dodge(width = 0.9)
-limits <- aes(ymax = usePy$pyUse + usePy$se,
-              ymin = usePy$pyUse - usePy$se)
-
-p <- ggplot(data = usePy, aes(x = sex, y = pyUse, fill = sex))
-
-p + geom_bar(stat = "identity", position = dodge) +
-  geom_errorbar(limits, position = dodge, width = 0.25) +
-  theme(axis.text.x=element_blank(), axis.ticks.x=element_blank(),
-        axis.title.x=element_blank())+
-  ggtitle("Past-Year POU by Gender")+
-  labs(y="Percent Yes", x = "Gender")
 
 usePyA <- svymean(~PYUse, design1, na.rm = TRUE)
 usePyA
