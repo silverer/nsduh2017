@@ -19,4 +19,4 @@ The following packages are required:
 
 Directories
 ===========
-To run the script, you will need to set your working directory and subfolder locations, currently on lines 68-70.
+To run the script, you will need to set your working directory and subfolder locations, currently on lines 71-75 in the analysis script and lines 4-8 in the dataset cleaning script.
