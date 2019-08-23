@@ -1,15 +1,15 @@
 library(dplyr)
 
 #NOTE--CHANGE PATH PER YOUR MACHINE'S FILES
-pathToRawData <- "C:\\Users\\USER_NAME\\Documents\\opioids\\"
+pathToRawData <- "C:\\Users\\ers2244\\Documents\\opioids\\"
 filename <- 'NSDUH_2017_Tab.tsv'
 fileLoc <- paste(pathToRawData, filename, sep = '')
 
-df <- read.delim(fileLoc, header = TRUE, sep = '\t')
+all_df <- read.delim(fileLoc, header = TRUE, sep = '\t')
 
-df1 <- dplyr::select(df, IRSEX, AGE2, HEALTH2, ANALWT_C, VEREP, VESTR, EDUHIGHCAT,
+df1 <- dplyr::select(all_df, IRSEX, AGE2, HEALTH2, ANALWT_C, VEREP, VESTR, EDUHIGHCAT,
                      IRINSUR4, PNRANYLIF, PNRANYREC, PNRNMLIF, PNRNMREC,DEPENDPNR,
-                     DEPNDPYPNR,
+                     DEPNDPYPNR, COUTYP4,HEALTH2,
                      PNRNMYR, PNRANYYR, NEWRACE2, INCOME, IRWRKSTAT18, IRMARIT,
                      PNRWYNORX, PNRWYGAMT, PNRWYOFTN, PNRWYLNGR, PNRWYOTWY,
                      PNRRSPAIN, PNRRSRELX, PNRRSEXPT, PNRRSHIGH, PNRRSSLEP,
@@ -20,6 +20,11 @@ df1 <- dplyr::select(df, IRSEX, AGE2, HEALTH2, ANALWT_C, VEREP, VESTR, EDUHIGHCA
 df1$misusePY <- df1$PNRNMYR
 df1$usePY <- df1$PNRANYYR
 
+df1$metro <- 0
+df1$metro[df1$COUTYP4 == 1 | df1$COUTYP4 == 2] <- 1
+
+df1$incomeF <- factor(df1$INCOME, levels = c(1, 2, 3, 4), labels=c('<20k', '20k-49k',
+                                                                   '50k-74k', '75k+'))
 
 df1$anyPRUse <- NA
 ## 1 = has used PR in lifetime, 0 = no PR use in lifetime, na = invalid Input
@@ -60,6 +65,10 @@ df1$education <- factor(df1$EDUHIGHCAT, levels = c(1:4), labels = c('less than h
                                                                     'college grad'))
 df1$hasInsurance[df1$IRINSUR4 == 1] <- 1
 df1$hasInsurance[df1$IRINSUR4 == 2] <- 0
+
+df1$healthStatus <- factor(df1$HEALTH2, levels = c(1, 2, 3, 4),
+                           labels = c('Excellent', 'Very Good', 'Good',
+                                      'Fair/Poor'))
 
 #0 = no insurance
 df1$insureType[df1$hasInsurance == 0] <- 0
@@ -209,10 +218,11 @@ df1$dependPY[df1$dependPYO == 1] <- 1
 df1$dependPY[df1$dependPYO == 0] <- 0
 
 df1$newSex <- NA
-df1$newSex[df1$IRSEX == 1] <- 1
-df1$newSex[df1$IRSEX == 2] <- 0
+df1$newSex[df1$IRSEX == 1] <- 2
+df1$newSex[df1$IRSEX == 2] <- 1
 
-df1$sexF <- factor(df1$newSex, levels = c(0, 1), labels=c("Women", "Men"))
+
+df1$sexF <- factor(df1$newSex, levels = c(1, 2), labels=c("Women", "Men"))
 
 
 df1 <- fastDummies::dummy_cols(df1, select_columns = "sourceFull")
@@ -238,4 +248,4 @@ colnames(df1)[names(df1) == 'mainRsn_8'] <- "mainHooked"
 colnames(df1)[names(df1) == 'mainRsn_9'] <- "mainOther"
 
 
-write.csv(df1, paste(directory, '\\opioids_cleaned_data_v1.csv', sep=''))
+write.csv(df1, paste(directory, '\\opioids_cleaned_data_v2.csv', sep=''))
