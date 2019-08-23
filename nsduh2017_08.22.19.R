@@ -1,7 +1,5 @@
 library(dplyr)
 library(stats)
-library(ggplot2)
-library(psych)
 library(survey)
 library(psych)
 
@@ -68,23 +66,22 @@ mergeSummaryDfs <- function(bigDf, model, outcome){
 }
 
 directory <- getwd()
-directory <- paste(directory, '/opioids/nsduh2017', sep='')
-#directory <- "C:\\Users\\ers2244\\Documents\\opioids\\nsduh2017"
+subfolder <- '/opioids'
+directory <- paste(directory,'opioids', '/nsduh2017', sep='')
 
+df <- read.delim("C:\\Users\\ers2244\\Documents\\opioids\\NSDUH_2017_Tab.tsv", header = TRUE, sep = '\t')
 
-#df <- read.delim("C:\\Users\\ers2244\\Documents\\opioids\\NSDUH_2017_Tab.tsv", header = TRUE, sep = '\t')
+df1 <- dplyr::select(df, IRSEX, AGE2, HEALTH2, ANALWT_C, VEREP, VESTR, EDUHIGHCAT,
+                     IRINSUR4, PNRANYLIF, PNRANYREC, PNRNMLIF, PNRNMREC,DEPENDPNR,
+                     DEPNDPYPNR,
+                     PNRNMYR, PNRANYYR, NEWRACE2, INCOME, IRWRKSTAT18, IRMARIT,
+                     PNRWYNORX, PNRWYGAMT, PNRWYOFTN, PNRWYLNGR, PNRWYOTWY,
+                     PNRRSPAIN, PNRRSRELX, PNRRSEXPT, PNRRSHIGH, PNRRSSLEP,
+                     PNRRSEMOT, PNRRSDGFX, PNRRSHOOK, PNRRSSOR, PNRRSOTRS2,
+                     PNRRSMAIN, PNRNORXFG, SRCPNRNM2, IRMCDCHP, IRMEDICR, IRCHMPUS,
+                     IRPRVHLT, IROTHHLT)
 
-# df1 <- dplyr::select(df, IRSEX, AGE2, HEALTH2, ANALWT_C, VEREP, VESTR, EDUHIGHCAT,
-#                      IRINSUR4, PNRANYLIF, PNRANYREC, PNRNMLIF, PNRNMREC,DEPENDPNR,
-#                      DEPNDPYPNR,
-#                      PNRNMYR, PNRANYYR, NEWRACE2, INCOME, IRWRKSTAT18, IRMARIT,
-#                      PNRWYNORX, PNRWYGAMT, PNRWYOFTN, PNRWYLNGR, PNRWYOTWY,
-#                      PNRRSPAIN, PNRRSRELX, PNRRSEXPT, PNRRSHIGH, PNRRSSLEP,
-#                      PNRRSEMOT, PNRRSDGFX, PNRRSHOOK, PNRRSSOR, PNRRSOTRS2,
-#                      PNRRSMAIN, PNRNORXFG, SRCPNRNM2, IRMCDCHP, IRMEDICR, IRCHMPUS,
-#                      IRPRVHLT, IROTHHLT)
-# 
-#file_loc <- paste(directory, '/opioids_cleaned_data_v1.csv', sep = '')
+file_loc <- paste(directory, '/opioids_cleaned_data_v1.csv', sep = '')
 df1 <- read.csv('opioids_cleaned_data_v1.csv', header = TRUE)
 #####DATA CLEANING--NO NEED TO RUN IF LOADING THE CLEANED DATASET####
 df1$misusePY <- df1$PNRNMYR
