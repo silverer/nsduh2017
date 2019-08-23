@@ -4,7 +4,7 @@ library(ggplot2)
 library(psych)
 library(survey)
 library(psych)
-library(oddsratio)
+
 
 defineDes <- function(dataset){
   design <- svydesign(
@@ -29,6 +29,30 @@ mergeCiDfs <- function(bigDf, model, varName){
   return(bigDf)
 }
 
+buildUnivariateDf <- function(meanby, var){
+  ci <- data.frame(confint(meanby))
+  
+  df <- data.frame(meanby)
+  if(ncol(df) == 2){
+    names(df) <- c('mean', 'SE')
+    df['sex'] <- 'all'
+  }else{
+    names(df) <- c('sex', 'mean', 'SE')
+  }
+  
+  df <- cbind(df, data.frame(ci))
+  df['variable'] <- var
+  print(df)
+  return(df)
+}
+
+stackUnivariateDf <- function(df, meanby, var){
+  new <- buildUnivariateDf(meanby, var)
+  df <- rbind(df, new)
+  print(df)
+  return(df)
+}
+
 summaryToDf <- function(model, outcome){
   results <- summary(model)
   df <- data.frame(results$coefficients)
@@ -43,24 +67,26 @@ mergeSummaryDfs <- function(bigDf, model, outcome){
   return(bigDf)
 }
 
-
-directory <- "C:\\Users\\ers2244\\Documents\\opioids\\nsduh2017"
-
-
-df <- read.delim("C:\\Users\\ers2244\\Documents\\opioids\\NSDUH_2017_Tab.tsv", header = TRUE, sep = '\t')
-
-df1 <- dplyr::select(df, IRSEX, AGE2, HEALTH2, ANALWT_C, VEREP, VESTR, EDUHIGHCAT,
-                     IRINSUR4, PNRANYLIF, PNRANYREC, PNRNMLIF, PNRNMREC,DEPENDPNR,
-                     DEPNDPYPNR,
-                     PNRNMYR, PNRANYYR, NEWRACE2, INCOME, IRWRKSTAT18, IRMARIT,
-                     PNRWYNORX, PNRWYGAMT, PNRWYOFTN, PNRWYLNGR, PNRWYOTWY,
-                     PNRRSPAIN, PNRRSRELX, PNRRSEXPT, PNRRSHIGH, PNRRSSLEP,
-                     PNRRSEMOT, PNRRSDGFX, PNRRSHOOK, PNRRSSOR, PNRRSOTRS2,
-                     PNRRSMAIN, PNRNORXFG, SRCPNRNM2, IRMCDCHP, IRMEDICR, IRCHMPUS,
-                     IRPRVHLT, IROTHHLT)
+directory <- getwd()
+directory <- paste(directory, '/opioids/nsduh2017', sep='')
+#directory <- "C:\\Users\\ers2244\\Documents\\opioids\\nsduh2017"
 
 
-#####DATA CLEANING####
+#df <- read.delim("C:\\Users\\ers2244\\Documents\\opioids\\NSDUH_2017_Tab.tsv", header = TRUE, sep = '\t')
+
+# df1 <- dplyr::select(df, IRSEX, AGE2, HEALTH2, ANALWT_C, VEREP, VESTR, EDUHIGHCAT,
+#                      IRINSUR4, PNRANYLIF, PNRANYREC, PNRNMLIF, PNRNMREC,DEPENDPNR,
+#                      DEPNDPYPNR,
+#                      PNRNMYR, PNRANYYR, NEWRACE2, INCOME, IRWRKSTAT18, IRMARIT,
+#                      PNRWYNORX, PNRWYGAMT, PNRWYOFTN, PNRWYLNGR, PNRWYOTWY,
+#                      PNRRSPAIN, PNRRSRELX, PNRRSEXPT, PNRRSHIGH, PNRRSSLEP,
+#                      PNRRSEMOT, PNRRSDGFX, PNRRSHOOK, PNRRSSOR, PNRRSOTRS2,
+#                      PNRRSMAIN, PNRNORXFG, SRCPNRNM2, IRMCDCHP, IRMEDICR, IRCHMPUS,
+#                      IRPRVHLT, IROTHHLT)
+# 
+#file_loc <- paste(directory, '/opioids_cleaned_data_v1.csv', sep = '')
+df1 <- read.csv('opioids_cleaned_data_v1.csv', header = TRUE)
+#####DATA CLEANING--NO NEED TO RUN IF LOADING THE CLEANED DATASET####
 df1$misusePY <- df1$PNRNMYR
 df1$usePY <- df1$PNRANYYR
 
@@ -533,23 +559,14 @@ design1 <- update(
 )
 
 #DEMOGRAPHICS
-emp <- svyby(~employment, ~sex, design1, svymean)
-emp
-confint(emp)
-tbl <- svytable(~employment+sex, design1)
-result <- summary(tbl, statistic = 'adjWald')
-empA <- svymean(~employment, design1)
-empA
-confint(empA)
+employment <- svyby(~employment, ~sex, design1, svymean)
+confint(employment)
+employmentAll <-  svymean(~employment, design1)
+result <- summary(svytable(~employment+sex, design1), statistic = 'adjWald')
 
-raceComp <- svyby(~race, ~sex, design1, svymean)
-raceComp
-confint(raceComp)
-tbl<- svytable(~race+sex, design1)
-summary(tbl, statistic = 'adjWald')
-raceA <- svymean(~race, design1)
-raceA
-confint(raceA)
+race <- svyby(~race, ~sex, design1, svymean)
+raceAll <- svymean(~race, design1)
+summary(svytable(~race+sex, design1), statistic = 'adjWald')
 
 education <- svyby(~ed, ~sex, design1, svymean)
 education
@@ -627,29 +644,7 @@ design1 <- update(
   moreOften = moreOften
 )
 
-buildUnivariateDf <- function(meanby, var){
-  ci <- data.frame(confint(meanby))
-  
-  df <- data.frame(meanby)
-  if(ncol(df) == 2){
-    names(df) <- c('mean', 'SE')
-    df['sex'] <- 'all'
-  }else{
-    names(df) <- c('sex', 'mean', 'SE')
-  }
-  
-  df <- cbind(df, data.frame(ci))
-  df['variable'] <- var
-  print(df)
-  return(df)
-}
 
-stackUnivariateDf <- function(df, meanby, var){
-  new <- buildUnivariateDf(meanby, var)
-  df <- rbind(df, new)
-  print(df)
-  return(df)
-}
 
 #Lifetime use
 lifetimeUse <- svyby(~anyUse, ~sex, design1, svymean)
@@ -657,7 +652,7 @@ df <- buildUnivariateDf(lifetimeUse, 'lifetimeUse')
 useAll <- svymean(~anyUse, design1)
 df <- stackUnivariateDf(df, useAll, 'lifetimeUse')
 
-result <- summary(svytable(~anyUse+sex, design1), statistic = 'adjWald')
+summary(svytable(~anyUse+sex, design1), statistic = 'adjWald')
 
 
 #Past year use
@@ -830,623 +825,92 @@ summary(svytable(~tookFrRel+sex, design1), statistic = "adjWald")
 multDocsComp <- svyby(~multDocs, ~sex, design1, svymean, na.rm = TRUE)
 df <- stackUnivariateDf(df, multDocsComp, 'srcMultDocs')
 df <- stackUnivariateDf(df, svymean(~multDocs, design1,na.rm = TRUE), 'srcMultDocs')
-write.csv(df, paste(directory, '\\test_univariate_outs.csv', sep = ""))
-
-
-
+#write.csv(df, paste(directory, '\\test_univariate_outs.csv', sep = ""))
 summary(svytable(~multDocs+sex, design1), statistic = "adjWald")
 
-tbl <- svytable(~stoleDoc+IRSEX, nsduh_design)
-summary(tbl, statistic = "Wald")
+df <- stackUnivariateDf(df, svyby(~stoleDoc, ~sex, design1, svymean, na.rm = TRUE), 
+                        'srcStoleDoc')
+df <- stackUnivariateDf(df, svymean(~stoleDoc, design1, na.rm=TRUE), 'srcStoleDoc')
+summary(svytable(~stoleDoc+sex, design1), statistic = "adjWald")
 
 drugDealTest <- svyby(~drugDeal, ~sex, design1, svymean, na.rm = TRUE)
 drugDealTest
-confint(drugDealTest)
-drugDealA <- svymean(~drugDeal, design1, na.rm = TRUE)
-drugDealA
-confint(drugDealTest, level = 0.95)
-tbl <- svytable(~drugDeal+sex, design1)
-summary(tbl, statistic = "adjWald")
-
-tempAny <- filter(df1, anyPRUse > 0)
-nsduh_design <- defineDes(tempAny)
-
-tbl <- svytable(~anyPRUse+IRSEX, nsduh_design)
-summary(tbl, statistic = "Wald")
-
-
-tempRx <- filter(df1, !is.na(df1$noOwnRx))
-nsduh_design <- defineDes(df1)
-design1 <- update(
-  nsduh_design,
-  employment = employment,
-  race = raceF,
-  ed = education,
-  hasInsurance = hasInsurance,
-  insureType = insureTypeF,
-  marStat = marStat,
-  age = ageCourseF,
-  noOwnRx = noOwnRx,
-  sex = IRSEX
-)
-
-
-
-woRx <- svyby(~noOwnRx, ~sex, design1, svymean, na.rm = TRUE)
-confint(woRx)
-
-tbl <- svytable(~noOwnRx+sex, design1)
-summary(tbl, statistic = "Wald")
-
-tempType <- filter(df1, !is.na(df1$moreOften) & !is.na(df1$longer) & !is.na(df1$greaterAmnt) & !is.na(df1$noOwnRx))
-
-nsduh_design <- defineDes(tempType)
-design1 <- update(
-  nsduh_design,
-  greaterAmnt = greaterAmnt,
-  longer = longer,
-  sexIsM = ifelse(IRSEX == "Men", 1, 0),
-  moreOften = moreOften,
-  noOwnRx = noOwnRx,
-  employment = employment,
-  race = raceF,
-  ed = education,
-  hasInsurance = hasInsurance,
-  insureType = insureTypeF,
-  marStat = marStat,
-  age = ageCourseF,
-  sex = IRSEX
-  
-)
-
-
-
-moreOftenTest <- svyby(~moreOften, ~sex, design1, svymean, na.rm = TRUE)
-confint(moreOftenTest)
-
-
-tbl <- svytable(~moreOften+sex, design1)
-summary(tbl, statistic = "Wald")
-
-tempAmnt <- filter(df1, greaterAmnt >0)
-nsduh_design <- defineDes(tempAmnt)
-design1 <- update(
-  nsduh_design,
-  
-  greaterAmnt = ifelse(greaterAmnt == 1, 1, 0),
-  sex = IRSEX
-)
-amnt <- svyby(~greaterAmnt, ~sex, design1, svymean, na.rm = TRUE)
-confint(amnt)
-tbl <- svytable(~greaterAmnt+sex, design1)
-summary(tbl, statistic = "Wald")
-
-tempLonger <- filter(df1, longer>0)
-nsduh_design <- defineDes(tempLonger)
-design1 <- update(
-  nsduh_design,
-  
-  longer = ifelse(longer == 1, 1, 0),
-  sex = IRSEX
-)
-longerTest <- svyby(~longer, ~sex, design1, svymean, na.rm = TRUE)
-confint(longerTest)
-
-tbl <- svytable(~longer+sex, design1)
-summary(tbl, statistic = "Wald")
-
-#### REASONS ####
-#1 = pain, 2 = relax, 3 = experiment, 4 = feel good/high
-#5 = sleep, 6 = emotions, 7 = other drug fx, 8 = hooked
-#9 = other
-tempMainRsn <- filter(df1, !is.na(mainRsn))
-dummyRsn <- fastDummies::dummy_cols(tempMainRsn, select_columns = "mainRsn")
-
-colnames(dummyRsn)[names(dummyRsn) == 'mainRsn_1'] <- "mainPain"
-colnames(dummyRsn)[names(dummyRsn) == 'mainRsn_2'] <- "mainRelax"
-colnames(dummyRsn)[names(dummyRsn) == 'mainRsn_3'] <- "mainExperiment"
-colnames(dummyRsn)[names(dummyRsn) == 'mainRsn_4'] <- "mainHigh"
-colnames(dummyRsn)[names(dummyRsn) == 'mainRsn_5'] <- "mainSleep"
-colnames(dummyRsn)[names(dummyRsn) == 'mainRsn_6'] <- "mainEmotions"
-colnames(dummyRsn)[names(dummyRsn) == 'mainRsn_7'] <- "mainOtherDrug"
-colnames(dummyRsn)[names(dummyRsn) == 'mainRsn_8'] <- "mainHooked"
-colnames(dummyRsn)[names(dummyRsn) == 'mainRsn_9'] <- "mainOther"
-
-nsduh_design <- defineDes(dummyRsn)
-
-design1 <- update(
-  nsduh_design,
-  
-  mainPain = mainPain,
-  mainRelax = mainRelax,
-  mainExperiment = mainExperiment,
-  mainHigh = mainHigh,
-  mainSleep = mainSleep,
-  mainEmotions = mainEmotions,
-  mainOtherDrug = mainOtherDrug,
-  mainHooked = mainHooked,
-  mainOther = mainOther,
-  employment = employment,
-  race = raceF,
-  ed = education,
-  hasInsurance = hasInsurance,
-  insureType = insureTypeF,
-  marStat = marStat,
-  age = ageCourseF,
-  sexIsM = ifelse(IRSEX == "Men", 1, 0),
-  sex = IRSEX
-)
-
-mainRPain <- svyby(~mainPain, ~sex, design1, svymean, na.rm = TRUE)
-confint(mainRPain)
-mainRPainA <- svymean(~mainPain, design1, na.rm = TRUE)
-tbl <- svytable(~mainPain+sex, design1)
-summary(tbl, statistic = "adjWald")
-
-
-
-mainRRelax <- svyby(~mainRelax, ~sex, design1, svymean, na.rm = TRUE)
-confint(mainRRelax)
-tbl <- svytable(~mainRelax+sex, design1)
-summary(tbl, statistic = "Wald")
-
-
-mainRExp <- svyby(~mainExperiment, ~sex, design1, svymean, na.rm = TRUE)
-confint(mainRExp)
-tbl <- svytable(~mainExperiment+sex, design1)
-summary(tbl, statistic = "Wald")
-
-
-mainRHigh <- svyby(~mainHigh, ~sex, design1, svymean, na.rm = TRUE)
-mainRHighA <- svymean(~mainHigh, design1, na.rm = TRUE)
-confint(mainRHigh)
-tbl <- svytable(~mainHigh+sex, design1)
-summary(tbl, statistic = "adjWald")
-
-
-test <-svyglm(mainHigh~sexIsM, design = design1, family = quasibinomial())
-summary(test)
-oddsR <- exp(cbind(OR = coef(test), confint(test, level =0.95)))
-oddsR
-
-mainRSleep <- svyby(~mainSleep, ~sex, design1, svymean, na.rm = TRUE)
-confint(mainRSleep)
-tbl <- svytable(~mainSleep+sex, design1)
-summary(tbl, statistic = "Wald")
-
-
-mainEmoAll <- svymean(~mainEmotions, design1, na.rm = TRUE)
-mainEmoAll
-confint(mainEmoAll)
-
-tbl <- table(dummyRsn$IRSEX, dummyRsn$mainEmotions)
-tbl
-
-
-mainREmo <- svyby(~mainEmotions, ~sex, design1, svymean, na.rm = TRUE)
-confint(mainREmo)
-tbl <- svytable(~mainEmotions+sex, design1)
-summary(tbl, statistic = "Wald")
-
-
-
-tbl <- svytable(~mainOtherDrug+IRSEX, nsduh_design)
-summary(tbl, statistic = "Wald")
-
-
-
-mainRHook <- svyby(~mainHooked, ~sex, design1, svymean, na.rm = TRUE)
-confint(mainRHook)
-tbl <- svytable(~mainHooked+sex, design1)
-summary(tbl, statistic = "Wald")
-
-
-
-tbl <- svytable(~mainOther+IRSEX, nsduh_design)
-summary(tbl, statistic = "Wald")
-
-
-#### OLD ####
-test <-svyglm(oneDoc~sexIsM+employment+hasInsurance+marStat+age+ed, design = design1, family = quasibinomial())
-summary(test)
-oddsR <- exp(cbind(OR = coef(test), confint(test, level =0.95)))
-oddsR
-
-tbl <- svytable(~sexIsM, design1)
-summary(tbl, statistic = "adjWald")
-test <-svyglm(mainHooked~sexIsM+employment+hasInsurance+age+marStat+ed, design = design1, family = quasibinomial())
-summary(test)
-oddsR <- exp(cbind(OR = coef(test), confint(test, level =0.95)))
-oddsR
-
-test <- svyglm(depend~sexIsM+ed+employment+age+hasInsurance+marStat, design = design1, family = quasibinomial())
-summary(test)
-oddsR <- exp(cbind(OR = coef(test), confint(test, level =0.95)))
-oddsR
-
-test <-svyglm(gotFrRel~sexIsM+employment+hasInsurance+marStat+age+ed, design = design1, family = quasibinomial())
-summary(test)
-
-test <-svyglm(pyMisuse~sexIsM+ed+employment+age+hasInsurance+marStat, design = design1, family = quasibinomial())
-summary(test)
-oddsR <- exp(cbind(OR = coef(test), confint(test, level =0.95)))
-oddsR
-test <-svyglm(medSource~sexIsM, design = design1, family = quasibinomial())
-summary(test)
-test <-svyglm(medSource~sexIsM+employment+hasInsurance+marStat+age+ed, design = design1, family = quasibinomial())
-summary(test)
-
-oddsR <- exp(cbind(OR = coef(test), confint(test, level =0.95)))
-oddsR
-
-
-test <-svyglm(gotFrRel~sexIsM, design = design1, family = quasibinomial())
-summary(test)
-oddsR <- exp(cbind(OR = coef(test), confint(test, level =0.95)))
-oddsR
-
-test <-svyglm(mainRelax~sexIsM+employment+hasInsurance+age+marStat+ed, design = design1, family = quasibinomial())
-summary(test)
-oddsR <- exp(cbind(OR = coef(test), confint(test, level =0.95)))
-oddsR
-
-test <-svyglm(tookFrRel~sexIsM, design = design1, family = quasibinomial())
-summary(test)
-test <-svyglm(tookFrRel~sexIsM+employment+hasInsurance+marStat+age+ed, design = design1, family = quasibinomial())
-summary(test)
-
-oddsR <- exp(cbind(OR = coef(test), confint(test, level =0.95)))
-oddsR
-
-test <-svyglm(pyUse~sexIsM+ed+employment+age+hasInsurance+marStat, design = design1, family = quasibinomial())
-summary(test)
-oddsR <- exp(cbind(OR = coef(test), confint(test, level =0.95)))
-oddsR
-
-
-
-test <-svyglm(boughtFrRel~sexIsM, design = design1, family = quasibinomial())
-summary(test)
-test <-svyglm(boughtFrRel~sexIsM+employment+hasInsurance+marStat+age+ed, design = design1, family = quasibinomial())
-summary(test)
-
-oddsR <- exp(cbind(OR = coef(test), confint(test, level =0.95)))
-oddsR
-
-
-test <-svyglm(mainOtherDrug~sexIsM+employment+hasInsurance+age+marStat+ed, design = design1, family = quasibinomial())
-summary(test)
-oddsR <- exp(cbind(OR = coef(test), confint(test, level =0.95)))
-oddsR
-
-test <- svyglm(anyPRUse~sexIsM+ed+employment+age+hasInsurance+marStat, design = design1, family = quasibinomial())
-summary(test)
-oddsR <- exp(cbind(OR = coef(test), confint(test, level =0.95)))
-oddsR
-w <- wald.test(b = coef(test), Sigma = vcov(test), Terms = 1)
-w
-
-test <-svyglm(mainExperiment~sexIsM+employment+hasInsurance+age+marStat+ed, design = design1, family = quasibinomial())
-summary(test)
-oddsR <- exp(cbind(OR = coef(test), confint(test, level =0.95)))
-oddsR
-
-test <-svyglm(mainPain~sexIsM+employment+hasInsurance+age+marStat+ed, design = design1, family = quasibinomial())
-summary(test)
-oddsR <- exp(cbind(OR = coef(test), confint(test, level =0.95)))
-oddsR
-
-test <-svyglm(noOwnRx~sex+employment+ed+hasInsurance+marStat+age, design = design1, family = quasibinomial())
-summary(test)
-oddsR <- exp(cbind(OR = coef(test), confint(test, level =0.95)))
-oddsR
-
-test <-svyglm(multDocs~sexIsM, design = design1, family = quasibinomial())
-summary(test)
-
-test <-svyglm(multDocs~sexIsM+employment+hasInsurance+marStat+age+ed, design = design1, family = quasibinomial())
-summary(test)
-
-oddsR <- exp(cbind(OR = coef(test), confint(test, level =0.95)))
-oddsR
-test <-svyglm(stoleDoc~sexIsM, design = design1, family = quasibinomial())
-summary(test)
-test <-svyglm(stoleDoc~sexIsM+employment+hasInsurance+marStat+age+ed, design = design1, family = quasibinomial())
-summary(test)
-
-oddsR <- exp(cbind(OR = coef(test), confint(test, level =0.95)))
-oddsR
-
-
-test <-svyglm(greaterAmnt~sexIsM+employment+ed+hasInsurance+marStat+age, design = design1, family = quasibinomial())
-summary(test)
-oddsR <- exp(cbind(OR = coef(test), confint(test, level =0.95)))
-oddsR
-
-test <-svyglm(longer~sexIsM+employment+ed+hasInsurance+marStat+age, design = design1, family = quasibinomial())
-summary(test)
-oddsR <- exp(cbind(OR = coef(test), confint(test, level =0.95)))
-oddsR
-
-test <-svyglm(moreOften~sexIsM+employment+ed+hasInsurance+marStat+age, design = design1, family = quasibinomial())
-summary(test)
-oddsR <- exp(cbind(OR = coef(test), confint(test, level =0.95)))
-
-
-test <-svyglm(mainEmotions~sexIsM+employment+hasInsurance+age+marStat+ed, design = design1, family = quasibinomial())
-summary(test)
-oddsR <- exp(cbind(OR = coef(test), confint(test, level =0.95)))
-oddsR
-
-test <-svyglm(mainHigh~sexIsM+employment+hasInsurance+age+marStat+ed, design = design1, family = quasibinomial())
-summary(test)
-oddsR <- exp(cbind(OR = coef(test), confint(test, level =0.95)))
-oddsR
-
-
-test <-svyglm(anyPRMisuse~sexIsM+ed+employment+age+hasInsurance+marStat, design = design1, family = quasibinomial())
-summary(test)
-oddsR <- exp(cbind(OR = coef(test), confint(test, level =0.95)))
-oddsR
-
-test <-svyglm(mainSleep~sexIsM+employment+hasInsurance+age+marStat+ed, design = design1, family = quasibinomial())
-summary(test)
-oddsR <- exp(cbind(OR = coef(test), confint(test, level =0.95)))
-oddsR
-
-chisq <- chisq.test(tempMisuse$AGE2, tempMisuse$anyPRMisuse)
-chisq
-
-chisq <- chisq.test(tempMisuse$race, tempMisuse$anyPRMisuse)
-chisq
-
-tempAnyRec <- filter(df1, mostRecentAny > 0)
-chisq <- chisq.test(tempAnyRec$IRSEX, tempAnyRec$mostRecentAny)
-chisq
-title <- "Most recent PR use any"
-xNames <- c("within year", "not within year")
-plotCrosstabs(title, xNames, tempAnyRec$IRSEX, tempAnyRec$mostRecentAny)
-
-chisq <- chisq.test(tempSource$IRSEX, tempSource$source)
-chisq
-title <- "Source of Opioid for Last Misuse by Gender"
-xNames <- c("Medical source", "Nonmedical source")
-plotCrosstabs(title, xNames, tempSource$IRSEX, tempSource$source)
-
-title <- "Got from one doc"
-xNames <- c("No", "Yes")
-plotCrosstabs(title, xNames, dummySource$IRSEX, dummySource$oneDoc)
-
-#dummySource$mainRsnPain <- NA
-#dummySource$mainRsnPain[dummySource$mainRsn == 1] <- 1
-#dummySource$mainRsnPain[is.na(dummySource$mainRsnPain)] <- 0
-dummySource <- filter(dummySource, pain == 1|mainRsn == 1)
-chisq <- chisq.test(dummySource$oneDoc, dummySource$IRSEX)
-chisq
-dummySource$sexTable <- NA
-dummySource$sexTable[dummySource$IRSEX == 1] <- "Men"
-dummySource$sexTable[dummySource$IRSEX == 2] <- "Women"
-dummySource$docTable[dummySource$oneDoc == 0] <- "Somewhere else"
-dummySource$docTable[dummySource$oneDoc == 1] <- "one doctor"
-counts <- table(dummySource$sexTable, dummySource$docTable)
-counts
-title <- "One doc vs high"
-xNames <- c("pain", "not pain")
-#note- women/men actually = not from 1 doc/from one doc
-test <-svyglm(noOwnRx~sexIsM+employment+ed+hasInsurance+marStat+age, design = design1, family = quasibinomial())
-summary(test)
-oddsR <- exp(cbind(OR = coef(test), confint(test, level =0.95)))
-oddsR
-
-chisq <- chisq.test(dummySource$IRSEX, dummySource$multDocs)
-chisq
-
-chisq <- chisq.test(dummySource$IRSEX, dummySource$stoleDoc)
-chisq
-chisq <- chisq.test(dummySource$IRSEX, dummySource$gotFrRel)
-chisq
-
-chisq <- chisq.test(dummySource$IRSEX, dummySource$boughtFrRel)
-chisq
-title <- "Bought friend/rel"
-xNames <- c("No", "Yes")
-plotCrosstabs(title, xNames, dummySource$IRSEX, dummySource$boughtFrRel)
-
-chisq <- chisq.test(dummySource$IRSEX, dummySource$tookFrRel)
-chisq
-
-chisq <- chisq.test(dummySource$IRSEX, dummySource$drugDeal)
-chisq
-title <- "Drug Deal"
-xNames <- c("No", "Yes")
-plotCrosstabs(title, xNames,dummySource$IRSEX, dummySource$drugDeal)
-
-counts<- table(tempMisuse$anyPRMisuse, tempMisuse$AGE2)
-title <- "Misuse by age group"
-xNames <- c("12", "13", "14", "15", "16", "17", "18", "19", "20",
-            "21", "22-23", "24-25", "26-29", "30-34", "35-49",
-            "50-64", "65+")
-barplot(counts, main = title, col = c("darkblue", "red"),
-        names.arg = xNames, beside = TRUE, legend = c("Misuse", "No misuse"))
-test <-svyglm(drugDeal~sexIsM, design = design1, family = quasibinomial())
-summary(test)
-test <-svyglm(drugDeal~sexIsM+employment+hasInsurance+marStat+age+ed, design = design1, family = quasibinomial())
-summary(test)
-
-oddsR <- exp(cbind(OR = coef(test), confint(test, level =0.95)))
-oddsR
-
-
-
-tempOnlyMisused <- filter(df1, anyPRMisuse == 1)
-tempOnlyMisused <- filter(tempOnlyMisused, depressed > 0)
-chisq <- chisq.test(tempOnlyMisused$IRSEX, tempOnlyMisused$depressed)
-chisq
-title <- "Past year major depressive episode among past year misusers"
-xNames <- c("Major depressive episode", "No major depressive episode")
-plotCrosstabs(title, xNames, tempOnlyMisused$IRSEX, tempOnlyMisused$depressed)
-
-
-counts <- table(tempOnlyMisused$IRSEX, tempOnlyMisused$AGE2)
-barplot(counts, main = "Age of Misusers by Gender", beside = TRUE,
-        names.arg = xNames, legend = c("Men", "Women"))
-
-counts <- table(tempMisuse$IRSEX, tempMisuse$anyPRMisuse)
-barplot(counts, main = "Lifetime Pain Reliever Misuse by Gender",
-        col = c("darkblue", "red"), names.arg = c("Yes", "No"), 
-        legend = c("Men", "Women"),beside = TRUE, ylab = "Frequency")
-
-
-chisq <- chisq.test(tempAny$IRSEX, tempAny$anyPRUse)
-chisq
-num <- nrow(tempAny)
-counts<- table(tempAny$IRSEX, tempAny$anyPRUse)
-counts
-title <- "Lifetime Pain Reliever Use (Any) by Gender"
-xNames <- c("Yes", "No")
-plotCrosstabs(title, xNames, tempAny$IRSEX, tempAny$anyPRUse)
-
-tempWhen <- filter(df1, mostRecentMisuse > 0)
-chisq <- chisq.test(tempWhen$IRSEX, tempWhen$mostRecentMisuse)
-chisq
-title <- "Most recent pain reliever misuse by gender"
-xNames <- c("Within last 12 mo.", "Before last 12 mo.")
-plotCrosstabs(title, xNames, tempWhen$IRSEX, tempWhen$mostRecentMisuse)
-
-tempPain <- filter(df1, pain >0)
-chisq <- chisq.test(tempPain$IRSEX, tempPain$pain)
-chisq
-title <- "Misused to relieve physical pain"
-xNames <- c("Yes", "No")
-plotCrosstabs(title, xNames, tempPain$IRSEX, tempPain$pain)
-tempPain$onlyPain <- NA
-tempPain$onlyPain[tempPain$relax == 2 & tempPain$exp == 2 & tempPain$high == 2
-                  & tempPain$sleep == 2 & tempPain$emot == 2 
-                  & tempPain$hooked == 2 
-                  & tempPain$otherDrug == 2 & tempPain$pain == 1] <- 1
-tempPain$onlyPain[is.na(tempPain$onlyPain)] <- 0
-chisq <- chisq.test(tempPain$IRSEX, tempPain$onlyPain)
-chisq
-
-tempRelax <- filter(df1, relax >0)
-chisq <- chisq.test(tempRelax$IRSEX, tempRelax$relax)
-chisq
-
-tempExp <- filter(df1, exp >0)
-chisq <- chisq.test(tempExp$IRSEX, tempExp$exp)
-chisq
-
-tempHigh <- filter(df1, high > 0)
-chisq <- chisq.test(tempHigh$IRSEX, tempHigh$high)
-chisq
-title <- "Misused to get high"
-xNames <- c("Yes", "No")
-plotCrosstabs(title, xNames, tempHigh$IRSEX, tempHigh$high)
-tempHigh$onlyHigh <- NA
-tempHigh$onlyHigh[tempHigh$pain == 2 & tempHigh$relax == 2 & tempHigh$exp == 2
-                  & tempHigh$emot == 2 & tempHigh$hooked == 2 & tempHigh$sleep == 2
-                  & tempHigh$otherDrug == 2 & tempHigh$high == 1] <- 1
-tempHigh$onlyHigh[is.na(tempHigh$onlyHigh)] <- 2
-chisq <- chisq.test(tempHigh$IRSEX, tempHigh$onlyHigh)
-chisq
-title <- "Only misused for high"
-xNames <- c("Misused for high only", "Misused for other reason")
-plotCrosstabs(title, xNames, tempHigh$IRSEX, tempHigh$onlyHigh)
-
-tempSleep <- filter(df1, sleep >0)
-chisq<- chisq.test(tempSleep$IRSEX, tempSleep$sleep)
-chisq
-title <- "Misued to help with sleep"
-xNames <- c("Yes", "No")
-plotCrosstabs(title, xNames, tempSleep$IRSEX, tempSleep$sleep)
-
-
-
-tempEmot <- filter(df1, emot > 0)
-chisq <- chisq.test(tempEmot$IRSEX, tempEmot$emot)
-chisq
-title <- "Misused to help with emotions"
-xNames <- c("Yes", "No")
-plotCrosstabs(title, xNames, tempEmot$IRSEX, tempEmot$emot)
-tempEmot$onlyEmot <- NA
-tempEmot$onlyEmot[tempEmot$pain == 2 & tempEmot$relax == 2 & tempEmot$high == 2
-                  & tempEmot$sleep == 2 & tempEmot$exp == 2 & tempEmot$hooked == 2
-                  & tempEmot$otherDrug == 2 & tempEmot$emot == 1] <- 1
-tempEmot$onlyEmot[is.na(tempEmot$onlyEmot)] <- 2
-chisq <- chisq.test(tempEmot$IRSEX, tempEmot$onlyEmot)
-chisq
-title <- "only emot"
-xNames <- c("yes", "no")
-plotCrosstabs(title, xNames, tempEmot$IRSEX, tempEmot$onlyEmot)
-
-
-tempOtherDrug <- filter(df1, otherDrug > 0)
-chisq <- chisq.test(tempOtherDrug$IRSEX, tempOtherDrug$otherDrug)
-chisq
-
-tempHooked <- filter(df1, hooked > 0)
-chisq <- chisq.test(tempHooked$IRSEX, tempHooked$hooked)
-chisq
-
-
-plotCrosstabs <- function(title, names, sexVar, var2){
-  counts <- table(sexVar, var2)
-  print(counts)
-  if(names[1] == FALSE){
-    widthVar <- rep(0.5, length(counts))
-    barplot(counts, main = title,
-            col = c("darkblue", "red"),
-            legend = c("Men", "Women"),beside = TRUE, ylim = c(0, max(counts) + 100),
-            ylab = "Frequency", axis.lty = 1)
-    
-  }else{
-    par(pin = c(3, 4))
-    par(mar = c(4,4,2,1)+.1)
-    
-    barplot(counts, main = title,
-            col = c("cadetblue", "indianred1"), names.arg = names, 
-            beside = TRUE, ylim = c(0, max(counts) + 100),
-            ylab = "Frequency", axis.lty = 1, legend = c("Men", "Women"))
-    
-  }
-}
-
-#filter so that only those who would've answered misuse question are included
-temp <- filter(df1, anyPRUse == 1)
-nsduh_design <-
-  svydesign(
-    id = ~VEREP,
-    strata = ~VESTR,
-    data = temp,
-    weights = ~ANALWT_C,
-    nest = TRUE
-  )
-
-design1 <- update(
-  nsduh_design,
-  
-  sex = IRSEX,
-  employment = employment,
-  race = raceRecode,
-  ed = education,
-  hasInsurance = hasInsurance,
-  insureType = insureTypeF,
-  marStat = marStat,
-  age = ageCourseF,
-  anyUse = anyPRUse,
-  anyMisUse = anyPRMisuse,
-  pyUse = usePY,
-  pyMisuse = misusePY,
-  oneDoc = oneDoc,
-  multDocs = multDocs,
-  stoleDoc = stoleDoc,
-  gotFrRel = gotFrRel,
-  boughtFrRel = boughtFrRel,
-  tookFrRel = tookFrRel,
-  drugDeal = drugDeal,
-  otherSrc = otherSrc,
-  noOwnRx = noOwnRx,
-  greaterAmnt = greaterAmnt,
-  longer = longer,
-  moreOften = moreOften
-)
+df <- stackUnivariateDf(df, svyby(~drugDeal, ~sex, design1, svymean, na.rm = TRUE),
+                        'srcDrugDeal')
+df <- stackUnivariateDf(df, svymean(~drugDeal, design1, na.rm = TRUE), 'srcDrugDeal')
+summary(svytable(~drugDeal+sex, design1), statistic = "adjWald")
+
+df <- stackUnivariateDf(df, svyby(~mainPain, ~sex, design1, svymean, na.rm = TRUE),
+                        'mainRsnPain')
+df <- stackUnivariateDf(df, svymean(~mainPain, design1, na.rm = TRUE), 'mainRsnPain')
+summary(svytable(~mainPain+sex, design1), statistic = "adjWald")
+
+df <- stackUnivariateDf(df, svyby(~mainRelax, ~sex, design1, svymean, na.rm = TRUE),
+                        'mainRsnRelax')
+df <- stackUnivariateDf(df, svymean(~mainRelax, design1, na.rm = TRUE), 'mainRsnRelax')
+summary(svytable(~mainRelax+sex, design1), statistic = "adjWald")
+
+df <- stackUnivariateDf(df, svyby(~mainExperiment, ~sex, design1, svymean, na.rm = TRUE),
+                        'mainRsnExperiment')
+df <- stackUnivariateDf(df, svymean(~mainExperiment, design1, na.rm = TRUE),
+                        'mainRsnExperiment')
+summary(svytable(~mainExperiment+sex, design1), statistic = "adjWald")
+
+df <- stackUnivariateDf(df, svyby(~mainHigh, ~sex, design1, svymean, na.rm = TRUE),
+                        'mainRsnHigh') 
+df <- stackUnivariateDf(df, svymean(~mainHigh, design1, na.rm = TRUE), 'mainRsnHigh')
+summary(svytable(~mainHigh+sex, design1), statistic = "adjWald")
+
+df <- stackUnivariateDf(df, svyby(~mainSleep, ~sex, design1, svymean, na.rm = TRUE),
+                        'mainRsnSleep') 
+df <- stackUnivariateDf(df, svymean(~mainSleep, design1, na.rm = TRUE),
+                        'mainRsnSleep')
+summary(svytable(~mainSleep+sex, design1), statistic = "adjWald")
+
+df <- stackUnivariateDf(df, svyby(~mainEmot, ~sex, design1, svymean, na.rm = TRUE),
+                        'mainRsnEmotions')
+df <- stackUnivariateDf(df, svymean(~mainEmot, design1, na.rm = TRUE), 'mainRsnEmotions')
+summary(svytable(~mainEmot+sex, design1), statistic = 'adjWald')
+
+df <- stackUnivariateDf(df, svyby(~mainOtherDrug, ~sex, design1, svymean, na.rm = TRUE),
+                        'mainRsnOtherDrug')
+df <- stackUnivariateDf(df, svymean(~mainOtherDrug, design1, na.rm = TRUE), 
+                        'mainRsnOtherDrug')
+summary(svytable(~mainOtherDrug+sex, design1), statistic = "adjWald")
+
+df <- stackUnivariateDf(df, svyby(~mainHooked, ~sex, design1, svymean, na.rm = TRUE),
+                        'mainRsnHooked')
+df <- stackUnivariateDf(df, svymean(~mainHooked, design1, na.rm = TRUE),
+                        'mainRsnHooked')
+summary(svytable(~mainHooked+sex, design1), statistic = "adjWald")
+
+df <- stackUnivariateDf(df, svyby(~mainOther, ~sex, design1, svymean, na.rm=TRUE),
+                        'mainRsnOther')
+df <- stackUnivariateDf(df, svymean(~mainOther, design1, na.rm = TRUE),
+                        'mainRsnOther')
+summary(svytable(~mainOther+sex, design1), statistic = 'adjWald')
+
+df <- stackUnivariateDf(df, svyby(~noOwnRx, ~sex, design1, svymean, na.rm = TRUE),
+                        'noOwnRx')
+df <- stackUnivariateDf(df, svymean(~noOwnRx, design1, na.rm = TRUE),
+                        'noOwnRx')
+summary(svytable(~noOwnRx+sex, design1), statistic = "adjWald")
+
+df <- stackUnivariateDf(df, svyby(~moreOften, ~sex, design1, svymean, na.rm = TRUE),
+                        'moreOften')
+df <- stackUnivariateDf(df, svymean(~moreOften, design1, na.rm = TRUE),
+                        'moreOften')
+summary(svytable(~moreOften+sex, design1), statistic = "adjWald")
+
+df <- stackUnivariateDf(df, svyby(~greaterAmnt, ~sex, design1, svymean, na.rm = TRUE),
+                        'greaterAmnt')
+df <- stackUnivariateDf(df, svymean(~greaterAmnt, design1, na.rm = TRUE),
+                        'greaterAmnt')
+summary(svytable(~greaterAmnt+sex, design1), statistic = "adjWald")
+
+df <- stackUnivariateDf(df, svyby(~longer, ~sex, design1, svymean, na.rm = TRUE),
+                        'longer')
+df <- stackUnivariateDf(df, svymean(~longer, design1, na.rm = TRUE),
+                        'longer')
+summary(svytable(~longer+sex, design1), statistic = "adjWald")
+write.csv(df, 'univariate_results.csv')
