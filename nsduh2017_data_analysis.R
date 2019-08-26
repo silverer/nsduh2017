@@ -290,8 +290,17 @@ rsnSleep <- svyglm(mainSleep~sex+employment+ed+race+age+hasInsurance+marStat+met
 confIntDf <- mergeCiDfs(confIntDf, rsnSleep, 'rsnSleep')
 summaryDf <- mergeSummaryDfs(summaryDf, rsnSleep, 'rsnSleep')
 
-write.csv(confIntDf, paste(directory, '\\conf_ints_log_reg_newvars_1.csv', sep=''))
-write.csv(summaryDf, paste(directory, '\\summary_log_reg_newvars_1.csv', sep=''))
+
+#write.csv(confIntDf, paste(directory, '\\conf_ints_log_reg_newvars_1.csv', sep=''))
+#write.csv(summaryDf, paste(directory, '\\summary_log_reg_newvars_1.csv', sep=''))
+
+allOutputs <- cbind(confIntDf, summaryDf)
+colnames(allOutputs) = c('OR','CI_lower_95', 'CI_upper_95', 'outcome',
+                         'coeff_est', 'coeff_std_err','coeff_t_value', 
+                         'coeff_p_value','outcome')
+
+write.csv(allOutputs, paste(directory, '\\all_outputs_multivariate.csv', sep=''))
+
 confIntDf['keep'] <-  FALSE
 summaryDf['keep'] <- FALSE
 
@@ -306,7 +315,10 @@ for(i in 1:nrow(confIntDf)){
 
 just_gender_ci <- filter(confIntDf, keep == TRUE)
 just_gender_summary <- filter(summaryDf, keep == TRUE)
+
+
 just_gender_outputs <- cbind(just_gender_ci, just_gender_summary)
+
 
 write.csv(just_gender_outputs, paste(directory, '\\outputs_gender_only.csv', sep=''))
 
@@ -323,10 +335,12 @@ nsduh_design <-
 
 design1 <- update(
   nsduh_design,
-  health <- healthStatus,
+  
+  income = incomeF,
+  health = healthStatus,
   sex = sexF,
   employment = employment,
-  race = raceF,
+  race = raceRecode,
   ed = education,
   hasInsurance = hasInsurance,
   insureType = insureTypeF,
@@ -350,16 +364,25 @@ design1 <- update(
 #DEMOGRAPHICS
 employment <- svyby(~employment, ~sex, design1, svymean)
 confint(employment)
+employment
 employmentAll <-  svymean(~employment, design1)
+employmentAll
+confint(employmentAll)
 result <- summary(svytable(~employment+sex, design1), statistic = 'adjWald')
 
 married <- svyby(~marStat, ~sex, design1, svymean)
+married
 confint(married)
 marriedAll <- svymean(~marStat, design1)
+marriedAll
+confint(marriedAll)
 summary(svytable(~marStat+sex, design1), statistic = 'adjWald')
 
 race <- svyby(~race, ~sex, design1, svymean)
+race
+confint(race)
 raceAll <- svymean(~race, design1)
+confint(raceAll)
 summary(svytable(~race+sex, design1), statistic = 'adjWald')
 
 education <- svyby(~ed, ~sex, design1, svymean)
@@ -423,7 +446,16 @@ insuranceAll <- svymean(~hasInsurance, design1)
 insuranceAll
 confint(insuranceAll)
 
-temp = filter(df1, !is.na(anyPRUse))
+
+healthStatus <- svyby(~health, ~sex, design1, svymean, na.rm = TRUE)
+healthStatus
+confint(healthStatus)
+summary(svytable(~health+sex, design1), statistic = 'adjWald')
+healthAll <- svymean(~health, design1, na.rm = TRUE)
+healthAll
+confint(healthAll)
+
+temp <- filter(df1, !is.na(anyPRUse))
 nsduh_design <-
   svydesign(
     id = ~VEREP,
