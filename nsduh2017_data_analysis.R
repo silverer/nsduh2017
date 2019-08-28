@@ -56,11 +56,46 @@ summaryToDf <- function(model, outcome){
   df <- data.frame(results$coefficients)
   df['variable'] <- outcome
   colnames(df) = c('Estimate', 'Std. Error', 't value', 'Pr(t)', 'outcome')
+  df['waldF'] <- NA
+  df['waldP'] <- NA
+  df['waldDf'] <- NA
+  df['waldDf2'] <- NA
+  sexTest <- regTermTest(model, 'sex')
+  df$waldF[rownames(df)=='sexMen'] <- sexTest$Ftest[1][1]
+  df$waldP[rownames(df)=='sexMen'] <- sexTest$p[1][1]
+  df$waldDf[rownames(df)=='sexMen'] <- sexTest$df
+  df$waldDf2[rownames(df)=='sexMen'] <- sexTest$ddf
+  
+  
+  return(df)
+}
+
+regressionTermDf <- function(model, outcome){
+  terms <- c('sex', 'employment', 'edF', 'race', 
+             'age', 'hasInsurance', 'marStat', 'metro',
+             'incomeF', 'health')
+  df <- data.frame('term'=terms)
+  
+  #df['term'] <- terms
+  df['waldF'] <- NA
+  df['waldP'] <- NA
+  df['outcome'] <- outcome
+  for(i in(1:length(terms))){
+    temp <- regTermTest(model, terms[i])
+    df$waldF[i] <- temp$Ftest[1][1]
+    df$waldP[i] <- temp$p[1][1]
+  }
   return(df)
 }
 
 mergeSummaryDfs <- function(bigDf, model, outcome){
   new <- summaryToDf(model, outcome)
+  bigDf <- rbind(bigDf, new)
+  return(bigDf)
+}
+
+mergeRegTermDfs <- function(bigDf, model, outcome){
+  new <- regressionTermDf(model, outcome)
   bigDf <- rbind(bigDf, new)
   return(bigDf)
 }
@@ -124,13 +159,13 @@ design1 <- update(
 )
 
 
-
 lifetime_use <- svyglm(anyUse~sex+employment+edF+race+age+hasInsurance+marStat+metro+incomeF+health, 
-                       design=design1,
-                        family=quasibinomial())
+                       design=design1, family=quasibinomial())
 summary(lifetime_use)
+
 confIntDf <- confIntToDf(lifetime_use, 'lifetime_use')
 summaryDf <- summaryToDf(lifetime_use, 'lifetime_use')
+regTestDf <- regressionTermDf(lifetime_use, 'lifetime_use')
 
 
 lifetime_misuse <- svyglm(anyMisUse~sex+employment+edF+race+age+hasInsurance+marStat+metro+incomeF+health, design=design1,
@@ -138,18 +173,20 @@ lifetime_misuse <- svyglm(anyMisUse~sex+employment+edF+race+age+hasInsurance+mar
 
 confIntDf <- mergeCiDfs(confIntDf,lifetime_misuse, 'lifetime_misuse')
 summaryDf <- mergeSummaryDfs(summaryDf, lifetime_misuse, 'lifetime_misuse')
-
+regTestDf <- mergeRegTermDfs(regTestDf, lifetime_misuse, 'lifetime_misuse')
 
 
 pastyr_use <- svyglm(pyUse~sex+employment+edF+race+age+hasInsurance+marStat+metro+incomeF+health, design=design1,
                        family=quasibinomial())
 confIntDf <- mergeCiDfs(confIntDf, pastyr_use, 'pastyr_use')
 summaryDf <- mergeSummaryDfs(summaryDf, pastyr_use, 'pastyr_use')
+regTestDf <- mergeRegTermDfs(regTestDf, pastyr_use, 'pastyr_use')
 
 pastyr_misuse <- svyglm(pyMisuse~sex+employment+edF+race+age+hasInsurance+marStat+metro+incomeF+health, design=design1,
                           family=quasibinomial())
 confIntDf <- mergeCiDfs(confIntDf, pastyr_misuse, 'pastyr_misuse')
 summaryDf <- mergeSummaryDfs(summaryDf, pastyr_misuse, 'pastyr_misuse')
+regTestDf <- mergeRegTermDfs(regTestDf, pastyr_misuse, 'pastyr_misuse')
 
 temp <- filter(df1, usePY == 1)
 nsduh_design <-
@@ -182,6 +219,8 @@ opDepend <- svyglm(depend~sex+employment+edF+race+age+hasInsurance+marStat+metro
                    family=quasibinomial())
 confIntDf <- mergeCiDfs(confIntDf, opDepend, 'dependence')
 summaryDf <- mergeSummaryDfs(summaryDf, opDepend, 'dependence')
+regTestDf <- mergeRegTermDfs(regTestDf, opDepend, 'dependence')
+
 summary(opDepend)
 #Filter to include only those who responded to detailed POMU questions
 temp <- filter(df1, misusePY == 1)
@@ -236,31 +275,37 @@ srcOneDoc <- svyglm(oneDoc~sex+employment+edF+race+age+hasInsurance+marStat+metr
                         family=quasibinomial())
 confIntDf <- mergeCiDfs(confIntDf, srcOneDoc, 'srcOneDoc')
 summaryDf <- mergeSummaryDfs(summaryDf, srcOneDoc, 'srcOneDoc')
+regTestDf <- mergeRegTermDfs(regTestDf, srcOneDoc, 'srcOneDoc')
 
 srcMultDocs <- svyglm(multDocs~sex+employment+edF+race+age+hasInsurance+marStat+metro+incomeF+health, design=design1,
                       family=quasibinomial())
 confIntDf <- mergeCiDfs(confIntDf, srcMultDocs, 'srcMultDocs')
 summaryDf <- mergeSummaryDfs(summaryDf, srcMultDocs, 'srcMultDocs')
+regTestDf <- mergeRegTermDfs(regTestDf, srcMultDocs, 'srcMultDocs')
 
 srcDrugDeal <- svyglm(drugDeal~sex+employment+edF+race+age+hasInsurance+marStat+metro+incomeF+health, design=design1,
                       family=quasibinomial())
 confIntDf <- mergeCiDfs(confIntDf, srcDrugDeal, 'srcDrugDeal')
 summaryDf <- mergeSummaryDfs(summaryDf, srcDrugDeal, 'srcDrugDeal')
+regTestDf <- mergeRegTermDfs(regTestDf, srcDrugDeal, 'srcDrugDeal')
 
 srcBoughtFrRel <- svyglm(boughtFrRel~sex+employment+edF+race+age+hasInsurance+marStat+metro+incomeF+health, design=design1,
                       family=quasibinomial())
 confIntDf <- mergeCiDfs(confIntDf, srcBoughtFrRel, 'srcBoughtFrRel')
 summaryDf <- mergeSummaryDfs(summaryDf, srcBoughtFrRel, 'srcBoughtFrRel')
+regTestDf <- mergeRegTermDfs(regTestDf, srcBoughtFrRel, 'srcBoughtFrRel')
 
 srcTookFrRel <- svyglm(tookFrRel~sex+employment+edF+race+age+hasInsurance+marStat+metro+incomeF+health, design=design1,
                          family=quasibinomial())
 confIntDf <- mergeCiDfs(confIntDf, srcTookFrRel, 'srcTookFrRel')
 summaryDf <- mergeSummaryDfs(summaryDf, srcTookFrRel, 'srcTookFrRel')
+regTestDf <- mergeRegTermDfs(regTestDf, srcTookFrRel, 'srcTookFrRel')
 
 srcGotFrRel <- svyglm(gotFrRel~sex+employment+edF+race+age+hasInsurance+marStat+metro+incomeF+health, design=design1,
                          family=quasibinomial())
 confIntDf <- mergeCiDfs(confIntDf, srcGotFrRel, 'gotFrRel')
 summaryDf <- mergeSummaryDfs(summaryDf, srcGotFrRel, 'gotFrRel')
+regTestDf <- mergeRegTermDfs(regTestDf, srcGotFrRel, 'srcGotFrRel')
 
 
 
@@ -268,35 +313,42 @@ rsnPain <- svyglm(mainPain~sex+employment+edF+race+age+hasInsurance+marStat+metr
                   family=quasibinomial())
 confIntDf <- mergeCiDfs(confIntDf, rsnPain, 'rsnPain')
 summaryDf <- mergeSummaryDfs(summaryDf, rsnPain, 'rsnPain')
+regTestDf <- mergeRegTermDfs(regTestDf, rsnPain, 'rsnPain')
 
 rsnEmot <- svyglm(mainEmot~sex+employment+edF+race+age+hasInsurance+marStat+metro+incomeF+health, design=design1,
                   family=quasibinomial())
 confIntDf <- mergeCiDfs(confIntDf,  rsnEmot, 'rsnEmot')
 summaryDf <- mergeSummaryDfs(summaryDf, rsnEmot, 'rsnEmot')
+regTestDf <- mergeRegTermDfs(regTestDf, rsnEmot, 'rsnEmot')
 
 rsnHigh <- svyglm(mainHigh~sex+employment+edF+race+age+hasInsurance+marStat+metro+incomeF+health, design=design1,
                   family=quasibinomial())
 confIntDf <- mergeCiDfs(confIntDf,  rsnHigh, 'rsnHigh')
 summaryDf <- mergeSummaryDfs(summaryDf, rsnHigh, 'rsnHigh')
+regTestDf <- mergeRegTermDfs(regTestDf, rsnHigh, 'rsnHigh')
 
 rsnRelax <- svyglm(mainRelax~sex+employment+edF+race+age+hasInsurance+marStat+metro+incomeF+health, design=design1,
                   family=quasibinomial())
 confIntDf <- mergeCiDfs(confIntDf, rsnRelax, 'rsnRelax')
 summaryDf <- mergeSummaryDfs(summaryDf, rsnRelax, 'rsnRelax')
+regTestDf <- mergeRegTermDfs(regTestDf, rsnRelax, 'rsnRelax')
 
 rsnExp <- svyglm(mainExp~sex+employment+edF+race+age+hasInsurance+marStat+metro+incomeF+health, design=design1,
                   family=quasibinomial())
 confIntDf <- mergeCiDfs(confIntDf, rsnExp, 'rsnExp')
 summaryDf <- mergeSummaryDfs(summaryDf, rsnExp, 'rsnExp')
+regTestDf <- mergeRegTermDfs(regTestDf, rsnExp, 'rsnExp')
 
 rsnSleep <- svyglm(mainSleep~sex+employment+edF+race+age+hasInsurance+marStat+metro+incomeF+health, design=design1,
                   family=quasibinomial())
 confIntDf <- mergeCiDfs(confIntDf, rsnSleep, 'rsnSleep')
 summaryDf <- mergeSummaryDfs(summaryDf, rsnSleep, 'rsnSleep')
+regTestDf <- mergeRegTermDfs(regTestDf, rsnSleep, 'rsnSleep')
 
 
 write.csv(confIntDf, paste(directory, '\\conf_ints_log_reg_newvars_v2.csv', sep=''))
 write.csv(summaryDf, paste(directory, '\\summary_log_reg_newvars_v2.csv', sep=''))
+write.csv(regTestDf, paste(directory, '\\wald_tests.csv', sep = ''))
 
 allOutputs <- cbind(confIntDf, summaryDf)
 colnames(allOutputs) = c('OR','CI_lower_95', 'CI_upper_95', 'outcome',
