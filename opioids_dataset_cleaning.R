@@ -1,7 +1,8 @@
 library(dplyr)
 
 #NOTE--CHANGE PATH PER YOUR MACHINE'S FILES
-pathToRawData <- "C:\\Users\\ers2244\\Documents\\opioids\\"
+directory <- getwd()
+pathToRawData <- "PATH"
 filename <- 'NSDUH_2017_Tab.tsv'
 fileLoc <- paste(pathToRawData, filename, sep = '')
 
